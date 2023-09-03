@@ -1,0 +1,23 @@
+@startuml
+actor User as User
+control UserInterface as ui
+boundary FileSelector as fs
+queue VideoProcessor as vp
+collections ProcessedData as pd
+
+User -> ui : selectVideo()
+ui -> fs : loadVideo()
+fs -> ui : requestParameters(params:specAn)
+User -> ui : enterSpecAnSettings(specAnSettings)
+ui -> vp : requestDataProcess(specAnSettings)
+  loop video frames
+    vp -> vp : processingVideo()
+  end
+  loop find faults
+    vp -> vp: scanForFaults()
+  end
+vp -> pd : saveProcessedData() : .csv
+vp -> ui : displayFaultsGraph()
+ui -> ui : showFaults()
+
+@enduml
