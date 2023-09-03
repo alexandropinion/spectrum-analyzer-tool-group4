@@ -9,6 +9,8 @@ import cv2
 import numpy
 from typing import List
 
+from numpy import ndarray
+
 
 #: Globals
 
@@ -20,19 +22,20 @@ class Decoder(object):
     def __init__(self) -> None:
         pass
 
-    def load_video(self, video_filepath: str) -> numpy.ndarray:
+    def load_video(self, video_filepath: str) -> list[ndarray]:
         logging.info(f"Attempting to load video from filepath {video_filepath}...")
         capture = cv2.VideoCapture(video_filepath)
-        frames: List[numpy.ndarray] = []
+        frames_found: list[ndarray] = []
         reading: bool = True
         while reading:
             reading, frame = capture.read()
             if reading:
-                frames.append(frame)
-        logging.info(f"Video from {video_filepath} has been loaded. {len(frames)} frames were read from the video.")
-        return frames
+                frames_found.append(frame)
+        logging.info(f"Video from {video_filepath} has been loaded. {len(frames_found)} frames were read from the video.")
+        self.show_frame(frames=frames_found)
+        return frames_found
 
-    def show_frame(self, frames: numpy.ndarray) -> None:
+    def show_frame(self, frames:  list[ndarray]) -> None:
         cv2.imshow("video", frames[0])
         cv2.waitKey(0)
         hsv_color_spectrum = cv2.cvtColor(frames[0], cv2.COLOR_BGR2HSV)
@@ -45,8 +48,10 @@ class VideoProcessor(Decoder):
     def __init__(self):
         super().__init__()
 
-    def find_graph(self, frames: numpy.ndarray, video_filepath: str) -> None:
+    def find_graph(self, frames:  list[ndarray], video_filepath: str) -> None:
         frames: numpy.ndarray = self.load_video(video_filepath=video_filepath)
+
+
 
 #: Function(s)
 
@@ -58,6 +63,6 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG,
                         format=_LOG_FORMAT, datefmt='%d-%b-%y %H:%M:%S')
     temp_filepath: str = f"{os.pardir}/assets/video_specAn_1.mkv"
-    decoder = Decoder()
-    frames = decoder.load_video(video_filepath=temp_filepath)
-    decoder.show_frame(frames=frames)
+    # decoder = Decoder()
+    # frames = decoder.load_video(video_filepath=temp_filepath)
+    # decoder.show_frame(frames=frames)

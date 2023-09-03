@@ -22,19 +22,6 @@ Builder.load_file('user_interface.kv')
 
 
 #: Classes
-class User(object):
-    def __init__(self) -> None:
-        logging.basicConfig(level=logging.DEBUG,
-                            format=_LOG_FORMAT, datefmt='%d-%b-%y %H:%M:%S')
-        self.decoder: video_processor.Decoder = video_processor.Decoder()
-
-    def select_video(self) -> str:
-        video_filepath: str = tkinter.filedialog.askopenfilename(filetypes=[("mp4", ".mp4"), ("mkv", ".mkv")])
-        logging.info(f"User selected filepath for video is: {video_filepath}")
-        return video_filepath
-
-    def process_video(self, filepath: str) -> None:
-        self.decoder.load_video(video_filepath=filepath)
 
 
 class user_interfaceApp(App):
@@ -47,16 +34,17 @@ class user_interfaceApp(App):
 
 
 class BackgroundLayout(Widget):
-    def temp_func(self):
-        pass
+    def select_video(self):
+        filepath: str = filedialog.askopenfilename()
+        processor = video_processor.VideoProcessor()
+        processor.load_video(video_filepath=filepath)
 
 
 #: Functions
 def main() -> None:
+    logging.basicConfig(level=logging.DEBUG,
+                        format=_LOG_FORMAT, datefmt='%d-%b-%y %H:%M:%S')
     user_interfaceApp().run()
-    # user = User()
-    # video_filepath = user.select_video()
-    # user.process_video(filepath=video_filepath)
 
 
 #: Main entry point
