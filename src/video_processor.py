@@ -5,7 +5,6 @@ This module is responsible for managing decoding of video for the application.
 #: Imports
 import logging
 import os
-
 import cv2
 import numpy
 from typing import List
