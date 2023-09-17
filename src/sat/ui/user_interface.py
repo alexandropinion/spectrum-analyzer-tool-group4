@@ -36,8 +36,8 @@ class user_interfaceApp(App):
 class BackgroundLayout(Widget):
     def select_video(self):
         filepath: str = filedialog.askopenfilename()
-        processor = video_processor.VideoProcessor()
-        processor.load_video(video_filepath=filepath)
+        processor = video_processor.Processor()
+        processor.run(video_filepath=filepath)
 
 
 #: Functions
