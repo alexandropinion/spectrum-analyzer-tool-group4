@@ -2,10 +2,11 @@
 """
 This module is responsible for managing user interactions with the application.
 """
-from kivy.lang import Builder
+
 
 #: Imports
-import video_processor
+from kivy.lang import Builder
+from src.sat.data.processor import Processor
 import tkinter
 from tkinter import filedialog
 import logging
@@ -36,7 +37,7 @@ class user_interfaceApp(App):
 class BackgroundLayout(Widget):
     def select_video(self):
         filepath: str = filedialog.askopenfilename()
-        processor = video_processor.Processor()
+        processor = Processor()
         processor.run(video_filepath=filepath)
 
 
