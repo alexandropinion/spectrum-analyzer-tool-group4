@@ -15,7 +15,7 @@ from numpy import ndarray
 from datetime import timedelta
 
 #: Globals
-_PROCESSING_METHODS = [cv2.TM_CCOEFF]
+_PROCESSING_METHODS = [cv2.TM_CCOEFF]  # Template Matching Correlation Coefficient
 
 
 #: Class(es)
@@ -52,14 +52,20 @@ class Processor(object):
                          f"Frame Number:\t(X, Y):\n")
         frame_counter: int = 0
         frame_thresholds: List[Tuple[bool, int]] = []
+        demo: bool = False
         while reading:
             reading, frame = capture.read()
             if reading:
                 frame_counter += 1
+                if frame_counter == 1:
+                    demo = True
+                else:
+                    demo = False
                 frame_threshold_found = self.process_frame_signal_failures(frame=frame, template=template,
                                                                            filestream=filestream,
                                                                            curr_frame_index=frame_counter,
-                                                                           dbm_threshold=self.dbm_thresh)
+                                                                           dbm_threshold=self.dbm_thresh,
+                                                                           demo=demo)
                 frame_thresholds.append((frame_threshold_found, frame_counter))
         self.graph_dbm_thresholds(thresholds=frame_thresholds, total_frames=frame_counter, frames_per_sec=fps,
                                   video_fp=video_fp, data_logfile=log_filename)
@@ -88,24 +94,39 @@ class Processor(object):
 
     def process_frame_signal_failures(self, frame: ndarray, template: ndarray, filestream: TextIO,
                                       curr_frame_index: int,
-                                      dbm_threshold: float) -> bool:
+                                      dbm_threshold: float,
+                                      demo: bool = False) -> bool:
+
         frame_grayscale = cv2.cvtColor(frame, cv2.IMREAD_GRAYSCALE)
         template_grayscale = cv2.cvtColor(template, cv2.IMREAD_GRAYSCALE)
+
         height_template, width_template, size = template_grayscale.shape
         reference_img = frame_grayscale.copy()
+
+        if demo:
+            show_frame(frame, "First Frame of Video")
+            #show_frame(frame_grayscale, "Grayscale of Frame")
+            show_frame(template_grayscale, "Reference Image Grayscale")
+            #show_frame(reference_img)  #: DEMO
+
         cropped_img = self.crop_template_from_frame(reference_frame=reference_img,
                                                     template=template_grayscale, template_width=width_template,
-                                                    template_height=height_template)
+                                                    template_height=height_template,
+                                                    demo=demo)
+
         under_threshold = self.scan_for_dbm_threshold(frame=cropped_img, filestream=filestream,
                                                       curr_frame_index=curr_frame_index,
                                                       bgra_max_limit=self.bgra_max_filter,
                                                       bgra_min_limit=self.bgra_min_filter,
-                                                      dbm_threshold=dbm_threshold)
+                                                      dbm_threshold=dbm_threshold,
+                                                      demo=demo)
+
         return under_threshold
 
     @staticmethod
     def crop_template_from_frame(reference_frame: ndarray, template: ndarray,
-                                 template_width: int, template_height: int) -> ndarray:
+                                 template_width: int, template_height: int,
+                                 demo: bool = False) -> ndarray:
         result = cv2.matchTemplate(reference_frame, template, _PROCESSING_METHODS[0])
         min_val, max_val, min_location, max_location = cv2.minMaxLoc(result)
         if _PROCESSING_METHODS in [cv2.TM_SQDIFF, cv2.TM_SQDIFF_NORMED]:
@@ -114,31 +135,38 @@ class Processor(object):
             img_location = max_location
         bottom_right = (img_location[0] + template_width, img_location[1] + template_height)
         cv2.rectangle(reference_frame, img_location, bottom_right, 255, 5)
+
         x1, y1 = img_location
         x2, y2 = bottom_right
         cropped_img = reference_frame[y1:y2, x1:x2]
+        if demo:
+            show_frame(reference_frame, "Best Match: Reference Image Pixels In First Frame")  #: DEMO
+            show_frame(cropped_img, "Cropped Image")  #: DEMO
         return cropped_img
 
     def scan_for_dbm_threshold(self, frame: ndarray, filestream: TextIO, curr_frame_index: int,
                                bgra_min_limit: List[float], bgra_max_limit: List[float],
-                               dbm_threshold: float) -> bool:
+                               dbm_threshold: float, demo: bool = False) -> bool:
         coordinates, under_threshold = self.parse_datapoints_from_frame(frame=frame, filestream=filestream,
                                                                         curr_frame_index=curr_frame_index,
                                                                         bgra_min_limit=bgra_min_limit,
                                                                         bgra_max_limit=bgra_max_limit,
-                                                                        dbm_threshold=dbm_threshold)
+                                                                        dbm_threshold=dbm_threshold,
+                                                                        demo=demo)
         return under_threshold
 
     @staticmethod
     def parse_datapoints_from_frame(frame: ndarray, filestream: TextIO, curr_frame_index: int,
                                     bgra_min_limit: List[float], bgra_max_limit: List[float],
-                                    dbm_threshold: float) -> Tuple[list, bool]:
+                                    dbm_threshold: float, demo: bool = False) -> Tuple[list, bool]:
         bgr_lower = numpy.array(bgra_min_limit)
         bgr_high = numpy.array(bgra_max_limit)
         mask = cv2.inRange(frame, bgr_lower, bgr_high)
         height = len(frame)
         width = len(frame[0])
         coord = cv2.findNonZero(mask)
+        if demo:
+            show_frame(mask, "Mask Image: Signal Trace Filtering")  # DEMO
         normalized_coordinates: List[Tuple[float, float]] = []
         under_threshold: bool = False
         if coord is not None:
@@ -159,20 +187,21 @@ class Processor(object):
 
 
 # Function(s):
-def show_frame(frame: ndarray) -> None:
-    cv2.imshow('Detected', frame)
+def show_frame(frame: ndarray, title: str) -> None:
+    logging.debug(f"DEMO: Showing the following frame: {title}...")
+    cv2.imshow(title, frame)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
 
 #: Main entry point
 if __name__ == "__main__":
-    # Debugging
+    # FOR DEMO
     _LOG_FORMAT = "[%(asctime)s : %(filename)s->%(funcName)s():%(lineno)s] : %(levelname)s: %(message)s"
     logging.basicConfig(level=logging.DEBUG,
                         format=_LOG_FORMAT, datefmt='%d-%b-%y %H:%M:%S')
 
-    # Debugging
+    # FOR DEMO
     video_fp: str = f"C:\\Users\\snipe\\OneDrive\\Documents\\GitHub\\spectrum-analyzer-tool-group5\\assets\\videos\\CW signal.mp4"
     template_fp: str = 'C:\\Users\\snipe\\OneDrive\\Documents\\GitHub\\spectrum-analyzer-tool-group5\\assets\\imgs\\templates\\cw_signal_cutout2.png'
     log_directory: str = 'C:\\Users\\snipe\\OneDrive\\Desktop\\SAT'
@@ -180,6 +209,4 @@ if __name__ == "__main__":
                           log_directory=log_directory, dbm_magnitude_threshold=0.8,
                           bgra_min_filter=[150, 200, 0, 255],
                           bgra_max_filter=[255, 255, 10, 255])
-    # processor.graph_dbm_thresholds(thresholds=[(True, 1), (False, 2), (True, 3), (False, 4), (True, 5)], total_frames=5,
-    #                                frames_per_sec=30, video_fp="video_fp", data_logfile="datalog")
     processor.run()
