@@ -3,6 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/spectrum-analyzer-tool-group5.iml" filepath="$PROJECT_DIR$/.idea/spectrum-analyzer-tool-group5.iml" />
+      <module fileurl="file://$USER_HOME$/Desktop/sspa-pat-app-development/.idea/sspa-pat-app.iml" filepath="$USER_HOME$/Desktop/sspa-pat-app-development/.idea/sspa-pat-app.iml" />
     </modules>
   </component>
 </project>
