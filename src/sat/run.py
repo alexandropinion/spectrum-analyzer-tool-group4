@@ -15,12 +15,12 @@ from tkinter import filedialog, messagebox, ttk
 
 #: Globals
 root = tkinter.Tk()
-root.title("Spectrum Analyzer Tool: Demo 2")
+root.title("Spectrum Analyzer Tool: Demo - Group 4 - Presentation 2 (Chris, George, Jeffrey, Seema, Alex)")
 root.withdraw()
 
 
 def get_csv_filepath() -> str:
-    p = ttk.Progressbar(root, orient="horizontal", length=800, mode="determinate",
+    p = ttk.Progressbar(root, orient="horizontal", length=1000, mode="determinate",
                         takefocus=True, maximum=100)
     p['value'] = 0
     p.pack(ipady=30)
@@ -56,10 +56,8 @@ def get_csv_filepath() -> str:
         except Exception:
             pass
 
-
-    #time.sleep(10)
-    #print(f"result = {result[0]}")
     root.after(1000, loading, processing_thread)
+    root.wm_attributes('-toolwindow', 'True')
     root.mainloop()
     return result[0]
 
