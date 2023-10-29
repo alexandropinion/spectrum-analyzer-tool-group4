@@ -48,6 +48,7 @@ def build_distribution() -> None:
 
     #: Create the zip we want to distribute and save to a desired location.
     shutil.copy(f"{curr_path}/{README_FILENAME}", f"{exe_fp}")
+    shutil.copy(f"{curr_path}/imgs", f"{exe_fp}")
     shutil.make_archive(dist_name, 'zip', exe_fp)
     shutil.copy(f"{curr_path}/{dist_name}.zip", dist_fp)
 

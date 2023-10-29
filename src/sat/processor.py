@@ -14,7 +14,6 @@ from typing import List, Tuple, TextIO
 from numpy import ndarray
 from datetime import timedelta
 
-
 #: Globals
 _PROCESSING_METHODS = [cv2.TM_CCOEFF]  # Template Matching Correlation Coefficient
 
@@ -58,17 +57,14 @@ class Processor(object):
             reading, frame = capture.read()
             if reading:
                 frame_counter += 1
-                # if frame_counter == 1:  # Enable for Demo
-                #     demo = True
-                # else:
-                #     demo = False
                 frame_threshold_found = self.process_frame_signal_failures(frame=frame, template=template,
                                                                            filestream=filestream,
                                                                            curr_frame_index=frame_counter,
                                                                            dbm_threshold=self.dbm_thresh,
                                                                            demo=demo)
                 frame_thresholds.append((frame_threshold_found, frame_counter))
-        #self.graph_dbm_thresholds(thresholds=frame_thresholds, total_frames=frame_counter, frames_per_sec=fps,
+        #: TODO - Make as an optional request
+        # self.graph_dbm_thresholds(thresholds=frame_thresholds, total_frames=frame_counter, frames_per_sec=fps,
         #                          video_fp=self.video_fp, data_logfile=log_filename)
         filestream.close()
         cv2.destroyAllWindows()
@@ -107,9 +103,9 @@ class Processor(object):
 
         if demo:
             show_frame(frame, "First Frame of Video")
-            #show_frame(frame_grayscale, "Grayscale of Frame")
+            # show_frame(frame_grayscale, "Grayscale of Frame")
             show_frame(template_grayscale, "Reference Image Grayscale")
-            #show_frame(reference_img)  #: DEMO
+            # show_frame(reference_img)  #: DEMO
 
         cropped_img = self.crop_template_from_frame(reference_frame=reference_img,
                                                     template=template_grayscale, template_width=width_template,
@@ -196,6 +192,13 @@ def show_frame(frame: ndarray, title: str) -> None:
     cv2.destroyAllWindows()
 
 
+def get_video_config(filepath: str) -> Tuple[float, bool, ndarray]:
+    capture = cv2.VideoCapture(filepath)
+    fps = capture.get(cv2.CAP_PROP_FPS)
+    read, frame = capture.read()
+    #cv2.imshow("example", frame)
+    return fps, read, frame
+
 #: Main entry point
 # if __name__ == "__main__":
 #     # FOR DEMO
@@ -205,7 +208,7 @@ def show_frame(frame: ndarray, title: str) -> None:
 #
 #     # FOR DEMO
 #     video_fp: str = f"C:\\Users\\snipe\\OneDrive\\Documents\\GitHub\\spectrum-analyzer-tool-group5\\assets\\videos\\CW signal.mp4"
-#     template_fp: str = 'C:\\Users\\snipe\\OneDrive\\Documents\\GitHub\\spectrum-analyzer-tool-group5\\assets\\imgs\\templates\\cw_signal_cutout2.png'
+#     template_fp: str = 'C:\\Users\\snipe\\OneDrive\\Documents\\GitHub\\spectrum-analyzer-tool-group5\\assets\\imgs\\templates\\template_1.png'
 #     log_directory: str = 'C:\\Users\\snipe\\OneDrive\\Desktop\\SAT'
 #     processor = Processor(video_fp=video_fp, template_fp=template_fp,
 #                           log_directory=log_directory, dbm_magnitude_threshold=0.8,

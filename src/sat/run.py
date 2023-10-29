@@ -29,7 +29,7 @@ def get_csv_filepath() -> str:
                                                title=f"Spectrum Analyzer Tool: Select Video to Load...")
     log_directory: str = filedialog.askdirectory(initialdir=os.getcwd(),
                                                  title=f"Spectrum Analyzer Tool: Select directory to save CSV results...")
-    template_fp: str = 'C:\\Users\\snipe\\OneDrive\\Documents\\GitHub\\spectrum-analyzer-tool-group5\\assets\\imgs\\templates\\cw_signal_cutout2.png'
+    template_fp: str = 'C:\\Users\\snipe\\OneDrive\\Documents\\GitHub\\spectrum-analyzer-tool-group5\\assets\\imgs\\templates\\template_1.png'
 
     processor = proc.Processor(video_fp=video_fp, template_fp=template_fp,
                                log_directory=log_directory, dbm_magnitude_threshold=0.8,
@@ -60,6 +60,9 @@ def get_csv_filepath() -> str:
     root.wm_attributes('-toolwindow', 'True')
     root.mainloop()
     return result[0]
+
+
+
 
 
 #: Main entry point
