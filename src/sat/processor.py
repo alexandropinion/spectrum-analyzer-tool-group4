@@ -196,8 +196,22 @@ def get_video_config(filepath: str) -> Tuple[float, bool, ndarray]:
     capture = cv2.VideoCapture(filepath)
     fps = capture.get(cv2.CAP_PROP_FPS)
     read, frame = capture.read()
-    #cv2.imshow("example", frame)
     return fps, read, frame
+
+
+def get_frame_count(filepath: str) -> int:
+    capture = cv2.VideoCapture(filepath)
+    return int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+
+
+def get_specific_frame(filepath: str, frame_num: int) -> ndarray:
+    try:
+        capture = cv2.VideoCapture(filepath)
+        capture.set(cv2.CAP_PROP_POS_FRAMES, frame_num - 1)
+        res, frame = capture.read()
+        return frame
+    except Exception as e:
+        logging.info(f"Error while trying to read frame number {frame_num} from video {filepath}: {e}")
 
 #: Main entry point
 # if __name__ == "__main__":

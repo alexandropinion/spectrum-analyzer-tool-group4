@@ -38,9 +38,9 @@
     <property name="geometry">
      <rect>
       <x>30</x>
-      <y>80</y>
+      <y>60</y>
       <width>261</width>
-      <height>361</height>
+      <height>381</height>
      </rect>
     </property>
     <property name="title">
@@ -155,19 +155,6 @@
      </property>
     </widget>
    </widget>
-   <widget class="QLabel" name="frameLabel">
-    <property name="geometry">
-     <rect>
-      <x>340</x>
-      <y>80</y>
-      <width>911</width>
-      <height>711</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string/>
-    </property>
-   </widget>
    <widget class="QGroupBox" name="groupBox_2">
     <property name="geometry">
      <rect>
@@ -195,7 +182,7 @@
       </font>
      </property>
      <property name="text">
-      <string>Press to go back</string>
+      <string>Back to Load Video</string>
      </property>
     </widget>
     <widget class="QPushButton" name="startProcessing">
@@ -213,7 +200,71 @@
       </font>
      </property>
      <property name="text">
-      <string>Press to go next</string>
+      <string>Go to Cal: Template</string>
+     </property>
+    </widget>
+   </widget>
+   <widget class="QLabel" name="sliderLabel">
+    <property name="geometry">
+     <rect>
+      <x>570</x>
+      <y>20</y>
+      <width>471</width>
+      <height>41</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>12</pointsize>
+      <weight>50</weight>
+      <bold>false</bold>
+     </font>
+    </property>
+    <property name="text">
+     <string>Choose Frame in Video:</string>
+    </property>
+   </widget>
+   <widget class="QGroupBox" name="groupBox_3">
+    <property name="geometry">
+     <rect>
+      <x>310</x>
+      <y>60</y>
+      <width>931</width>
+      <height>721</height>
+     </rect>
+    </property>
+    <property name="title">
+     <string>Current Frame</string>
+    </property>
+    <widget class="QSlider" name="frameSlider">
+     <property name="geometry">
+      <rect>
+       <x>60</x>
+       <y>20</y>
+       <width>781</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+    </widget>
+    <widget class="QLabel" name="frameLabel">
+     <property name="geometry">
+      <rect>
+       <x>40</x>
+       <y>80</y>
+       <width>861</width>
+       <height>641</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>11</pointsize>
+      </font>
+     </property>
+     <property name="text">
+      <string/>
      </property>
     </widget>
    </widget>

@@ -12,6 +12,17 @@ Engineers and analysts at the 402 SWEG Robbins AFB are responsible for verifying
 - Press the **Load Video** button to begin processing
 - Once processing is complete, a file location within a prompt should be displayed to show the resulting csv filepath
 
+## Environment
+If the customer would like to modify the existing code, the following enviroment can be used optionally to make revisions to source:
+
+- Python 3.11_64bit (recommended to utilize a virtual environment)
+- Install requirements.txt from the root folder in this project directory
+- For UI changes, launch the designer with `qt5-tool designer` cmd from bash
+  - Open any .ui file, make changes, save, and rebuild the associated .py file with:
+    - `pyuic5 [ui_filename_here].ui -o [ui_filename_here].py` 
+- Building an executable:
+  - Once all changes are made, run the distribution.py file from this directory
+    - Executable and all artifacts will be created into dist/[current_version_and_app_name_here].zip
 
 # LICENSE
 ___
