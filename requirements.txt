@@ -2,3 +2,5 @@ opencv-python~=4.8.0.76
 numpy~=1.25.2
 Kivy~=2.2.1
 plotly~=5.17.0
+PyQt5~=5.15.9
+pyinstaller~=6.1.0

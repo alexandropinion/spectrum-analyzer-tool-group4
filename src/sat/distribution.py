@@ -8,7 +8,7 @@ import PyInstaller.__main__
 import shutil
 
 #: Metadata
-__app_version__ = '0.0.1'
+__app_version__ = '0.0.2'
 __app_name__ = 'Spectrum Analyzer Tool'
 
 #: Globals
@@ -43,12 +43,14 @@ def build_distribution() -> None:
         f'--workpath=%s' % f"{dist_fp}",
         f'--distpath=%s' % f"{exe_fp}",
         '--add-data=%s' % f"*.py{os_separator}.",
+        '--add-data=%s' % f"*.ui{os_separator}.",
         os.path.join('', 'run.py'),
     ])
 
     #: Create the zip we want to distribute and save to a desired location.
     shutil.copy(f"{curr_path}/{README_FILENAME}", f"{exe_fp}")
-    shutil.copy(f"{curr_path}/imgs", f"{exe_fp}")
+    shutil.copy(f"{curr_path}/imgs/template_1.png", f"{exe_fp}")
+    shutil.copy(f"{curr_path}/config.ini", f"{exe_fp}")
     shutil.make_archive(dist_name, 'zip', exe_fp)
     shutil.copy(f"{curr_path}/{dist_name}.zip", dist_fp)
 

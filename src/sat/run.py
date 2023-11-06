@@ -13,6 +13,8 @@ import os
 from time import sleep
 from tkinter import filedialog, messagebox, ttk
 
+from gui import start
+
 #: Globals
 root = tkinter.Tk()
 root.title("Spectrum Analyzer Tool: Demo - Group 4 - Presentation 2 (Chris, George, Jeffrey, Seema, Alex)")
@@ -62,9 +64,6 @@ def get_csv_filepath() -> str:
     return result[0]
 
 
-
-
-
 #: Main entry point
 def main() -> None:
     # FOR DEMO
@@ -73,25 +72,12 @@ def main() -> None:
                         format=_LOG_FORMAT, datefmt='%d-%b-%y %H:%M:%S')
     title: str = "Spectrum Analyzer Tool: Presentation 2 Demo"
 
-    # FOR DEMO
-    # video_fp: str = f"C:\\Users\\snipe\\OneDrive\\Documents\\GitHub\\spectrum-analyzer-tool-group5\\assets\\videos\\CW signal.mp4"
-    # log_directory: str = 'C:\\Users\\snipe\\OneDrive\\Desktop\\SAT'
-
     tkinter.messagebox.showinfo(title=title,
                                 message="This is a demo of the standalone executable feature for the Spectrum "
                                         "Analyzer Tool created by Group 5.\n"
                                         "\nClick OK to select a video capture file to load...")
 
-    #: Simple load screen for demo
-    # root.title(title)
-    # label = tkinter.Label(root, text="Waiting for task to finish.")
-    # label.pack()
-    #
-    # root.after(200, task)
-    # root.mainloop()
-
     csv_filepath: str = get_csv_filepath()
-    # csv_filepath: str = processor.run()
     launch_csv = tkinter.messagebox.askyesno(title=title,
                                              message=f"Processing Complete!\nCSV file saved at the "
                                                      f"following location: {csv_filepath}\n"
@@ -101,4 +87,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    # main()
+    start()

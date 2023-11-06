@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1269</width>
+    <width>1282</width>
     <height>827</height>
    </rect>
   </property>
@@ -34,38 +34,25 @@
      <string>Select Template Image:</string>
     </property>
    </widget>
-   <widget class="QLabel" name="templateLabel">
-    <property name="geometry">
-     <rect>
-      <x>440</x>
-      <y>140</y>
-      <width>731</width>
-      <height>581</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string/>
-    </property>
-   </widget>
    <widget class="QGroupBox" name="groupBox">
     <property name="geometry">
      <rect>
       <x>20</x>
       <y>130</y>
       <width>341</width>
-      <height>181</height>
+      <height>191</height>
      </rect>
     </property>
     <property name="title">
-     <string>GroupBox</string>
+     <string>Controls</string>
     </property>
-    <widget class="QPushButton" name="loadVidBtn">
+    <widget class="QPushButton" name="loadTemplateBtn">
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>70</y>
+       <y>40</y>
        <width>321</width>
-       <height>51</height>
+       <height>131</height>
       </rect>
      </property>
      <property name="font">
@@ -77,6 +64,150 @@
       <string>Press to Select New Template</string>
      </property>
     </widget>
+   </widget>
+   <widget class="QGroupBox" name="groupBox_2">
+    <property name="geometry">
+     <rect>
+      <x>400</x>
+      <y>140</y>
+      <width>851</width>
+      <height>661</height>
+     </rect>
+    </property>
+    <property name="title">
+     <string/>
+    </property>
+    <widget class="QLabel" name="processedTemplate">
+     <property name="geometry">
+      <rect>
+       <x>70</x>
+       <y>30</y>
+       <width>671</width>
+       <height>291</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string/>
+     </property>
+    </widget>
+    <widget class="QLabel" name="traceTemplate">
+     <property name="geometry">
+      <rect>
+       <x>70</x>
+       <y>340</y>
+       <width>671</width>
+       <height>291</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string/>
+     </property>
+    </widget>
+   </widget>
+   <widget class="QPushButton" name="startProcessingBtn">
+    <property name="geometry">
+     <rect>
+      <x>30</x>
+      <y>690</y>
+      <width>321</width>
+      <height>111</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>12</pointsize>
+     </font>
+    </property>
+    <property name="text">
+     <string>Press to Begin Processing &gt;</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="templateBackBtn">
+    <property name="geometry">
+     <rect>
+      <x>30</x>
+      <y>620</y>
+      <width>321</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>12</pointsize>
+     </font>
+    </property>
+    <property name="text">
+     <string>&lt; Go back to Cal: Trace RGB</string>
+    </property>
+   </widget>
+   <widget class="QSlider" name="traceRangeSlider">
+    <property name="geometry">
+     <rect>
+      <x>80</x>
+      <y>390</y>
+      <width>22</width>
+      <height>160</height>
+     </rect>
+    </property>
+    <property name="toolTip">
+     <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;When adjusting this slider, the previous page's Trace RGB value used will be used against a minimum and maximum RGB, based on the slider's percentage. This allows the user to tune to a specific trace range for optimal processing of each signal.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+    </property>
+    <property name="orientation">
+     <enum>Qt::Vertical</enum>
+    </property>
+   </widget>
+   <widget class="QSlider" name="templateSlider">
+    <property name="geometry">
+     <rect>
+      <x>430</x>
+      <y>80</y>
+      <width>761</width>
+      <height>22</height>
+     </rect>
+    </property>
+    <property name="orientation">
+     <enum>Qt::Horizontal</enum>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_2">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>300</y>
+      <width>261</width>
+      <height>81</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>12</pointsize>
+      <weight>50</weight>
+      <bold>false</bold>
+     </font>
+    </property>
+    <property name="text">
+     <string>Adjust Trace RGB % Catch:</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_3">
+    <property name="geometry">
+     <rect>
+      <x>440</x>
+      <y>0</y>
+      <width>261</width>
+      <height>81</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>12</pointsize>
+      <weight>50</weight>
+      <bold>false</bold>
+     </font>
+    </property>
+    <property name="text">
+     <string>Select Frame:</string>
+    </property>
    </widget>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>

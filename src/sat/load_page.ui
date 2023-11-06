@@ -17,73 +17,106 @@
    <enum>Qt::ToolButtonTextOnly</enum>
   </property>
   <widget class="QWidget" name="loadVideoWidget">
-   <widget class="QPushButton" name="loadVidBtn">
+   <widget class="QGroupBox" name="groupBox">
     <property name="geometry">
      <rect>
-      <x>330</x>
-      <y>260</y>
-      <width>501</width>
-      <height>51</height>
+      <x>170</x>
+      <y>120</y>
+      <width>861</width>
+      <height>571</height>
+     </rect>
+    </property>
+    <property name="title">
+     <string/>
+    </property>
+    <widget class="QPushButton" name="loadVidBtn">
+     <property name="geometry">
+      <rect>
+       <x>170</x>
+       <y>140</y>
+       <width>501</width>
+       <height>51</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>12</pointsize>
+      </font>
+     </property>
+     <property name="text">
+      <string>Press to Select Video File</string>
+     </property>
+    </widget>
+    <widget class="QTextEdit" name="csvFilepathLabel">
+     <property name="geometry">
+      <rect>
+       <x>170</x>
+       <y>370</y>
+       <width>501</width>
+       <height>71</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>12</pointsize>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="readOnly">
+      <bool>true</bool>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="csvFilepathBtn">
+     <property name="geometry">
+      <rect>
+       <x>170</x>
+       <y>320</y>
+       <width>501</width>
+       <height>51</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>12</pointsize>
+      </font>
+     </property>
+     <property name="text">
+      <string>Press to Change CSV Filepath</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="noteLabel">
+     <property name="geometry">
+      <rect>
+       <x>320</x>
+       <y>190</y>
+       <width>211</width>
+       <height>16</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Note: File Type Must Be mp4 or mkv</string>
+     </property>
+    </widget>
+   </widget>
+   <widget class="QLabel" name="titleLabel">
+    <property name="geometry">
+     <rect>
+      <x>300</x>
+      <y>50</y>
+      <width>591</width>
+      <height>41</height>
      </rect>
     </property>
     <property name="font">
      <font>
-      <pointsize>12</pointsize>
-     </font>
-    </property>
-    <property name="text">
-     <string>Press to Select Video File</string>
-    </property>
-   </widget>
-   <widget class="QLabel" name="noteLabel">
-    <property name="geometry">
-     <rect>
-      <x>480</x>
-      <y>310</y>
-      <width>211</width>
-      <height>16</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>Note: File Type Must Be mp4 or mkv</string>
-    </property>
-   </widget>
-   <widget class="QPushButton" name="csvFilepathBtn">
-    <property name="geometry">
-     <rect>
-      <x>330</x>
-      <y>410</y>
-      <width>501</width>
-      <height>51</height>
-     </rect>
-    </property>
-    <property name="font">
-     <font>
-      <pointsize>12</pointsize>
-     </font>
-    </property>
-    <property name="text">
-     <string>Press to Change CSV Filepath</string>
-    </property>
-   </widget>
-   <widget class="QTextEdit" name="csvFilepathLabel">
-    <property name="geometry">
-     <rect>
-      <x>330</x>
-      <y>490</y>
-      <width>501</width>
-      <height>71</height>
-     </rect>
-    </property>
-    <property name="font">
-     <font>
-      <pointsize>12</pointsize>
+      <pointsize>16</pointsize>
       <weight>75</weight>
       <bold>true</bold>
      </font>
     </property>
-    <property name="readOnly">
-     <bool>true</bool>
+    <property name="text">
+     <string>Spectrum Analyzer Tool: Video Processor</string>
     </property>
    </widget>
   </widget>

@@ -9,9 +9,11 @@ import os
 import plotly.graph_objects as go
 import cv2
 import numpy
+from cv2 import Mat
+
 import type
-from typing import List, Tuple, TextIO
-from numpy import ndarray
+from typing import List, Tuple, TextIO, Any
+from numpy import ndarray, dtype, generic
 from datetime import timedelta
 
 #: Globals
@@ -36,7 +38,7 @@ class Processor(object):
 
     def run(self, result: List[str]) -> None:
         logging.info(f"Attempting to load video from filepath {self.video_fp}...")
-        template = self.load_template_im(template_img_fp=self.template_fp)
+        template = load_template_im(template_img_fp=self.template_fp)
         capture = cv2.VideoCapture(self.video_fp)
         fps = capture.get(cv2.CAP_PROP_FPS)
         reading: bool = True
@@ -95,24 +97,23 @@ class Processor(object):
                                       dbm_threshold: float,
                                       demo: bool = False) -> bool:
 
-        frame_grayscale = cv2.cvtColor(frame, cv2.IMREAD_GRAYSCALE)
-        template_grayscale = cv2.cvtColor(template, cv2.IMREAD_GRAYSCALE)
+        # frame_grayscale = cv2.cvtColor(frame, cv2.IMREAD_GRAYSCALE)
+        # template_grayscale = cv2.cvtColor(template, cv2.IMREAD_GRAYSCALE)
+        #
+        # height_template, width_template, size = template_grayscale.shape
+        # reference_img = frame_grayscale.copy()
+        reference_img, height_template, width_template, size, template_grayscale = (
+            get_reference_frame(frame=frame,
+                                template=template))
 
-        height_template, width_template, size = template_grayscale.shape
-        reference_img = frame_grayscale.copy()
+        cropped_img = crop_template_from_frame(reference_frame=reference_img,
+                                               template=template_grayscale,
+                                               template_width=width_template,
+                                               template_height=height_template,
+                                               demo=demo)
 
-        if demo:
-            show_frame(frame, "First Frame of Video")
-            # show_frame(frame_grayscale, "Grayscale of Frame")
-            show_frame(template_grayscale, "Reference Image Grayscale")
-            # show_frame(reference_img)  #: DEMO
-
-        cropped_img = self.crop_template_from_frame(reference_frame=reference_img,
-                                                    template=template_grayscale, template_width=width_template,
-                                                    template_height=height_template,
-                                                    demo=demo)
-
-        under_threshold = self.scan_for_dbm_threshold(frame=cropped_img, filestream=filestream,
+        under_threshold = self.scan_for_dbm_threshold(frame=cropped_img,
+                                                      filestream=filestream,
                                                       curr_frame_index=curr_frame_index,
                                                       bgra_max_limit=self.bgra_max_filter,
                                                       bgra_min_limit=self.bgra_min_filter,
@@ -120,27 +121,6 @@ class Processor(object):
                                                       demo=demo)
 
         return under_threshold
-
-    @staticmethod
-    def crop_template_from_frame(reference_frame: ndarray, template: ndarray,
-                                 template_width: int, template_height: int,
-                                 demo: bool = False) -> ndarray:
-        result = cv2.matchTemplate(reference_frame, template, _PROCESSING_METHODS[0])
-        min_val, max_val, min_location, max_location = cv2.minMaxLoc(result)
-        if _PROCESSING_METHODS in [cv2.TM_SQDIFF, cv2.TM_SQDIFF_NORMED]:
-            img_location = min_location
-        else:
-            img_location = max_location
-        bottom_right = (img_location[0] + template_width, img_location[1] + template_height)
-        cv2.rectangle(reference_frame, img_location, bottom_right, 255, 5)
-
-        x1, y1 = img_location
-        x2, y2 = bottom_right
-        cropped_img = reference_frame[y1:y2, x1:x2]
-        if demo:
-            show_frame(reference_frame, "Best Match: Reference Image Pixels In First Frame")  #: DEMO
-            show_frame(cropped_img, "Cropped Image")  #: DEMO
-        return cropped_img
 
     def scan_for_dbm_threshold(self, frame: ndarray, filestream: TextIO, curr_frame_index: int,
                                bgra_min_limit: List[float], bgra_max_limit: List[float],
@@ -157,9 +137,10 @@ class Processor(object):
     def parse_datapoints_from_frame(frame: ndarray, filestream: TextIO, curr_frame_index: int,
                                     bgra_min_limit: List[float], bgra_max_limit: List[float],
                                     dbm_threshold: float, demo: bool = False) -> Tuple[list, bool]:
-        bgr_lower = numpy.array(bgra_min_limit)
-        bgr_high = numpy.array(bgra_max_limit)
-        mask = cv2.inRange(frame, bgr_lower, bgr_high)
+        # bgr_lower = numpy.array(bgra_min_limit)
+        # bgr_high = numpy.array(bgra_max_limit)
+        # mask = cv2.inRange(frame, bgr_lower, bgr_high)
+        mask = parse_trace_from_frame(bgra_min_limit=bgra_min_limit, bgra_max_limit=bgra_max_limit, frame=frame)
         height = len(frame)
         width = len(frame[0])
         coord = cv2.findNonZero(mask)
@@ -179,17 +160,31 @@ class Processor(object):
         filestream.write(f"{curr_frame_index}, {','.join(map(str, normalized_coordinates))}\n")
         return normalized_coordinates, under_threshold
 
-    @staticmethod
-    def load_template_im(template_img_fp: str) -> cv2.imread:
-        return cv2.imread(filename=template_img_fp, flags=0)
-
 
 # Function(s):
+def load_template_im(template_img_fp: str) -> cv2.imread:
+    return cv2.imread(filename=template_img_fp, flags=0)
+
+
 def show_frame(frame: ndarray, title: str) -> None:
     logging.debug(f"DEMO: Showing the following frame: {title}...")
     cv2.imshow(title, frame)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
+
+
+def parse_trace_from_frame(bgra_min_limit: List[float], bgra_max_limit: List[float], frame: ndarray):
+    """
+    This returns the image that parses out the trace from the rest of the image
+    :param bgra_min_limit:
+    :param bgra_max_limit:
+    :param frame:
+    :return:
+    """
+    bgr_lower = numpy.array(bgra_min_limit)
+    bgr_high = numpy.array(bgra_max_limit)
+    mask = cv2.inRange(frame, bgr_lower, bgr_high)
+    return mask
 
 
 def get_video_config(filepath: str) -> Tuple[float, bool, ndarray]:
@@ -212,6 +207,41 @@ def get_specific_frame(filepath: str, frame_num: int) -> ndarray:
         return frame
     except Exception as e:
         logging.info(f"Error while trying to read frame number {frame_num} from video {filepath}: {e}")
+
+
+def get_reference_frame(frame: ndarray, template: ndarray) -> tuple[Mat | ndarray | ndarray[
+    Any, dtype[generic | generic]], int, int, int, Mat | ndarray | ndarray[Any, dtype[generic | generic]]] | None:
+    try:
+        frame_grayscale = cv2.cvtColor(frame, cv2.IMREAD_GRAYSCALE)
+        template_grayscale = cv2.cvtColor(template, cv2.IMREAD_GRAYSCALE)
+
+        height_template, width_template, size = template_grayscale.shape
+        reference_img = frame_grayscale.copy()
+        return reference_img, height_template, width_template, size, template_grayscale
+    except Exception as e:
+        logging.info(f"Error while capturing reference frame: {e}")
+        return None
+
+
+def crop_template_from_frame(reference_frame: ndarray, template: ndarray,
+                             template_width: int, template_height: int,
+                             demo: bool = False) -> ndarray:
+    result = cv2.matchTemplate(reference_frame, template, _PROCESSING_METHODS[0])
+    min_val, max_val, min_location, max_location = cv2.minMaxLoc(result)
+    if _PROCESSING_METHODS in [cv2.TM_SQDIFF, cv2.TM_SQDIFF_NORMED]:
+        img_location = min_location
+    else:
+        img_location = max_location
+    bottom_right = (img_location[0] + template_width, img_location[1] + template_height)
+    cv2.rectangle(reference_frame, img_location, bottom_right, 255, 5)
+
+    x1, y1 = img_location
+    x2, y2 = bottom_right
+    cropped_img = reference_frame[y1:y2, x1:x2]
+    if demo:
+        show_frame(reference_frame, "Best Match: Reference Image Pixels In First Frame")  #: DEMO
+        show_frame(cropped_img, "Cropped Image")  #: DEMO
+    return cropped_img
 
 #: Main entry point
 # if __name__ == "__main__":
