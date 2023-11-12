@@ -2,7 +2,7 @@ import configparser
 import logging
 import os
 from types import NoneType
-from typing import Optional
+from typing import Optional, Tuple
 
 import numpy
 from PyQt5.QtCore import Qt, QSize, QTimer, pyqtSignal
@@ -213,8 +213,11 @@ class CalibrationWindow(QMainWindow):
 
 
 class TemplateWindow(QMainWindow):
+    DEFAULT_TRACE_SLIDER_VAL: int = 25
+
     def __init__(self, widget: QtWidgets.QStackedWidget):
         super(TemplateWindow, self).__init__()
+        self.window_initialized: bool = False
         self.current_template = []
         self.widget = widget
         uic.loadUi("template_page.ui", self)
@@ -228,18 +231,19 @@ class TemplateWindow(QMainWindow):
         self.template_slider: QSlider = self.findChild(QSlider, "templateSlider")
         self.template_slider.valueChanged.connect(self.template_slider_callback)
         self.trace_range_slider: QSlider = self.findChild(QSlider, "traceRangeSlider")
-        self.trace_range_slider.valueChanged.connect(self.trace_range_slider_callback)
+        self.trace_range_slider.sliderReleased.connect(self.trace_range_slider_callback)
         self.current_template_filepath: str = ""  #: TODO: Load from ini file
         self.template_frame_label = self.findChild(QLabel, "processedTemplate")
         self.trace_frame_label = self.findChild(QLabel, "traceTemplate")
         self.current_video_filepath: str = ''
-        #: TODO - temporarily add these values
-        self.bgra_min_limit = [150, 200, 0, 255]
-        self.bgra_max_limit = [255, 255, 10, 255]
+
+        self.bgra_min_limit = [0, 0, 0, 255]
+        self.bgra_max_limit = [0, 0, 0, 255]
 
         self.init_template_slider()
         self.init_trace_rgb_slider()
         self.init_template_window()
+        self.window_initialized = True
 
     def get_current_video_filepath(self, signal_filepath) -> None:
         self.current_video_filepath = signal_filepath
@@ -248,6 +252,8 @@ class TemplateWindow(QMainWindow):
     def init_trace_rgb_slider(self) -> None:
         self.trace_range_slider.setMinimum(0)
         self.trace_range_slider.setMaximum(100)
+        self.trace_range_slider.setValue(self.DEFAULT_TRACE_SLIDER_VAL)  # Give default value
+        self.trace_range_slider_callback()
 
     def init_template_slider(self):
         logging.info(f"Initializing template slider...")
@@ -260,15 +266,54 @@ class TemplateWindow(QMainWindow):
                 self.template_slider.setValue(0)
                 self.current_template_filepath = str(config['cal.template']['cal_template_filepath'])
                 self.current_template.append(load_template_im(template_img_fp=self.current_template_filepath))
-                #self.template_slider_callback()
         except Exception as e:
             logging.info(f"Error while initializing template slider: {e}")
 
+    @staticmethod
+    def process_min_max_trace_range_val(rgb_val: float, trace_percent: float) -> Tuple[int, int]:
+        delta_val = int(rgb_val * (trace_percent / 100))
+        new_max = rgb_val + delta_val
+        new_min = rgb_val - delta_val
+        if new_max > 255:
+            new_max = 255
+        if new_max < 0:
+            new_max = 0
+        if new_min > 255:
+            new_min = 255
+        if new_min < 0:
+            new_min = 0
+        return round(new_min), round(new_max)
+
     def trace_range_slider_callback(self) -> None:
         try:
-            pass
+            trace_percent = self.trace_range_slider.value()
+            if trace_percent > 1.0:
+                conf = configparser.ConfigParser()
+                conf.read_file(open(CONFIG_FILENAME, 'r'))
+                curr_red = int(conf['cal.trace']['red'])
+                curr_green = int(conf['cal.trace']['green'])
+                curr_blue = int(conf['cal.trace']['blue'])
+                new_red_min, new_red_max = self.process_min_max_trace_range_val(rgb_val=curr_red,
+                                                                                trace_percent=trace_percent)
+                new_green_min, new_green_max = self.process_min_max_trace_range_val(rgb_val=curr_green,
+                                                                                    trace_percent=trace_percent)
+                new_blue_min, new_blue_max = self.process_min_max_trace_range_val(rgb_val=curr_blue,
+                                                                                  trace_percent=trace_percent)
+                self.bgra_min_limit = [new_blue_min, new_green_min, new_red_min, 255]
+                self.bgra_max_limit = [new_blue_max, new_green_max, new_red_max, 255]
+
+                conf.set("cal.template", "red_max", str(new_red_max))
+                conf.set("cal.template", "red_min", str(new_red_min))
+                conf.set("cal.template", "green_max", str(new_green_max))
+                conf.set("cal.template", "green_min", str(new_green_min))
+                conf.set("cal.template", "blue_max", str(new_blue_max))
+                conf.set("cal.template", "blue_min", str(new_blue_min))
+                with open(CONFIG_FILENAME, "w") as conf_file:
+                    conf.write(conf_file)
+                if self.window_initialized:
+                    self.template_slider_callback()
         except Exception as e:
-            pass
+            logging.info(f"Issue while processing trace range slider: {e}")
 
     def load_template_frame_to_label(self, frame: ndarray) -> None:
         converted_img = QImage(
@@ -303,8 +348,14 @@ class TemplateWindow(QMainWindow):
             mask = parse_trace_from_frame(bgra_min_limit=self.bgra_min_limit,
                                           bgra_max_limit=self.bgra_max_limit,
                                           frame=cropped_img)
-            self.load_template_frame_to_label(frame=reference_img)
-            self.load_mask_frame_to_label(frame=mask)
+
+            qimage_trace = QImage(mask.data, mask.shape[1], mask.shape[0], QImage.Format_Grayscale8)
+            height, width, bytesPerComponent = cropped_img.shape
+            bgra = numpy.zeros([height, width, 4], dtype=numpy.uint8)
+            bgra[:, :, 0:4] = cropped_img
+            qimage_template = QImage(bgra.data, width, height, QImage.Format_ARGB32)
+            self.trace_frame_label.setPixmap(QtGui.QPixmap.fromImage(qimage_trace))
+            self.template_frame_label.setPixmap(QtGui.QPixmap.fromImage(qimage_template))
         except Exception as e:
             logging.info(f"Error while using slider: {e}")
 
@@ -346,8 +397,6 @@ class TemplateWindow(QMainWindow):
                 config = configparser.ConfigParser()
                 config.read_file(config_file)
                 self.current_template_filepath = str(config['cal.template']['cal_template_filepath'])
-                # self.current_template = load_template_im(template_img_fp=self.current_template_filepath)
-                # self.template_slider_callback()
         except Exception as e:
             logging.info(f"Error while initializing the window page: {e}")
 
@@ -356,22 +405,6 @@ class TemplateWindow(QMainWindow):
 
     def start_processing(self) -> None:
         print(f"Processing...")
-
-    # def template_btn_callback(self) -> None:
-    #     fname: QFileDialog = QFileDialog.getOpenFileName(self, "Select Template", "", "*.png | *.jpg | *.jpeg")
-    #     selected_fp: str = ""
-    #     if fname:
-    #         try:
-    #             selected_fp = fname[0]
-    #         except Exception as e:
-    #             msg = QMessageBox()
-    #             msg.setIcon(QMessageBox.Critical)
-    #             msg.setText("Unable to Select Template File:")
-    #             msg.setInformativeText(f"The application was unable to load a video.\n"
-    #                                    f"Error: {e}\n"
-    #                                    f"Ensure that a valid filepath is chosen...")
-    #             msg.setWindowTitle("Error")
-    #             msg.exec_()
 
 
 def start() -> None:

@@ -97,11 +97,6 @@ class Processor(object):
                                       dbm_threshold: float,
                                       demo: bool = False) -> bool:
 
-        # frame_grayscale = cv2.cvtColor(frame, cv2.IMREAD_GRAYSCALE)
-        # template_grayscale = cv2.cvtColor(template, cv2.IMREAD_GRAYSCALE)
-        #
-        # height_template, width_template, size = template_grayscale.shape
-        # reference_img = frame_grayscale.copy()
         reference_img, height_template, width_template, size, template_grayscale = (
             get_reference_frame(frame=frame,
                                 template=template))
