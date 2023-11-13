@@ -34,10 +34,31 @@ class MainWindow(QMainWindow):
         self.widget = widget
         self.load_video_btn = self.findChild(QPushButton, "loadVidBtn")
         self.load_video_btn.clicked.connect(self.load_video_btn_callback)
-        self.csv_select_btn = self.findChild(QPushButton, "csvFilepathBtn")
-        self.csv_select_btn.clicked.connect(self.csv_select_btn_callback)
+        # self.csv_select_btn = self.findChild(QPushButton, "csvFilepathBtn")
+        # self.csv_select_btn.clicked.connect(self.csv_select_btn_callback)
         self.csv_textbox = self.findChild(QTextEdit, "csvFilepathLabel")
         self.ini_file_exists: bool = self.load_ini_file_to_app()
+        #self.setup_window_backgroud()
+        # oImage = QImage("background.jpg")
+        # sImage = oImage.scaled(QSize(300, 200))  # resize Image to widgets size
+        # palette = QPalette()
+        # palette.setBrush(QPalette.Window, QBrush(sImage))
+        # self.setPalette(palette)
+        #
+        # self.label = QLabel('Test', self)  # test, if it's really backgroundimage
+        # self.label.setGeometry(50, 50, 200, 50)
+
+
+    def setup_window_backgroud(self) -> None:
+        oImage = QImage("background.jpg")
+        sImage = oImage.scaled(QSize(300, 200))  # resize Image to widgets size
+        palette = QPalette()
+        palette.setBrush(QPalette.Window, QBrush(sImage))
+        self.setPalette(palette)
+
+        self.label = QLabel('Test', self)  # test, if it's really backgroundimage
+        self.label.setGeometry(50, 50, 200, 50)
+        self.show()
 
     def load_video_btn_callback(self) -> None:
         fname: QFileDialog = QFileDialog.getOpenFileName(self, "Open File", "", "*.mp4 | *.mkv")
@@ -80,21 +101,21 @@ class MainWindow(QMainWindow):
             logging.info(e)
             return False
 
-    def csv_select_btn_callback(self) -> None:
-        csv_directory = str(QFileDialog.getExistingDirectory(self, "Select Directory to save CSV data to:"))
-        logging.info(f"Location to save CSV file has been selected: {csv_directory}")
-        self.current_csv_filepath.emit(csv_directory)
-        self.csv_textbox.setText(csv_directory)
-
-        try:
-            conf = configparser.ConfigParser()
-            conf.read_file(open(CONFIG_FILENAME, 'r'))
-            conf.set("app", "csv_output_directory", csv_directory)
-            with open(CONFIG_FILENAME, "w") as conf_file:
-                conf.write(conf_file)
-
-        except Exception as e:
-            logging.info(f"Exception while selecting csv directory: {e}")
+    # def csv_select_btn_callback(self) -> None:
+    #     csv_directory = str(QFileDialog.getExistingDirectory(self, "Select Directory to save CSV data to:"))
+    #     logging.info(f"Location to save CSV file has been selected: {csv_directory}")
+    #     self.current_csv_filepath.emit(csv_directory)
+    #     self.csv_textbox.setText(csv_directory)
+    #
+    #     try:
+    #         conf = configparser.ConfigParser()
+    #         conf.read_file(open(CONFIG_FILENAME, 'r'))
+    #         conf.set("app", "csv_output_directory", csv_directory)
+    #         with open(CONFIG_FILENAME, "w") as conf_file:
+    #             conf.write(conf_file)
+    #
+    #     except Exception as e:
+    #         logging.info(f"Exception while selecting csv directory: {e}")
 
 
 class CalibrationWindow(QMainWindow):
@@ -213,7 +234,6 @@ class CalibrationWindow(QMainWindow):
 
 
 class TemplateWindow(QMainWindow):
-    DEFAULT_TRACE_SLIDER_VAL: int = 25
 
     def __init__(self, widget: QtWidgets.QStackedWidget):
         super(TemplateWindow, self).__init__()
@@ -222,8 +242,8 @@ class TemplateWindow(QMainWindow):
         self.widget = widget
         uic.loadUi("template_page.ui", self)
 
-        self.start_processing_btn = self.findChild(QPushButton, 'startProcessingBtn')
-        self.start_processing_btn.clicked.connect(self.start_processing_btn_callback)
+        self.next_page_btn = self.findChild(QPushButton, 'nextPageBtn')
+        self.next_page_btn.clicked.connect(self.next_page_btn_callback)
         self.template_back_btn = self.findChild(QPushButton, 'templateBackBtn')
         self.template_back_btn.clicked.connect(self.template_back_btn_callback)
         self.load_template_btn = self.findChild(QPushButton, 'loadTemplateBtn')
@@ -252,7 +272,13 @@ class TemplateWindow(QMainWindow):
     def init_trace_rgb_slider(self) -> None:
         self.trace_range_slider.setMinimum(0)
         self.trace_range_slider.setMaximum(100)
-        self.trace_range_slider.setValue(self.DEFAULT_TRACE_SLIDER_VAL)  # Give default value
+        try:
+            with open(f"{CONFIG_FILENAME}") as config_file:
+                config = configparser.ConfigParser()
+                config.read_file(config_file)
+                self.trace_range_slider.setValue(int(config['cal.template']['default_trace_slider_val']))
+        except Exception as e:
+            logging.info(f"Error while initializing trace rgb slider: {e}")
         self.trace_range_slider_callback()
 
     def init_template_slider(self):
@@ -308,6 +334,7 @@ class TemplateWindow(QMainWindow):
                 conf.set("cal.template", "green_min", str(new_green_min))
                 conf.set("cal.template", "blue_max", str(new_blue_max))
                 conf.set("cal.template", "blue_min", str(new_blue_min))
+                conf.set('cal.template', 'default_trace_slider_val', str(self.trace_range_slider.value()))
                 with open(CONFIG_FILENAME, "w") as conf_file:
                     conf.write(conf_file)
                 if self.window_initialized:
@@ -359,14 +386,8 @@ class TemplateWindow(QMainWindow):
         except Exception as e:
             logging.info(f"Error while using slider: {e}")
 
-    def start_processing_btn_callback(self) -> None:
-        msg = QMessageBox()
-        msg.setIcon(QMessageBox.Warning)
-        msg.setText(f"Are you sure you want to start processing?")  # TODO - Add estimated time?
-        msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
-        val = msg.exec_()
-        if val == QMessageBox.Ok:
-            self.start_processing()
+    def next_page_btn_callback(self) -> None:
+        self.widget.setCurrentIndex(3)
 
     def load_template_btn_callback(self) -> None:
         fname: QFileDialog = QFileDialog.getOpenFileName(self, "Select Template Image", "", "*.jpeg | *.png")
@@ -403,8 +424,36 @@ class TemplateWindow(QMainWindow):
     def template_back_btn_callback(self) -> None:
         self.widget.setCurrentIndex(1)
 
+
+
+
+class SignalWindow(QMainWindow):
+
+    def __init__(self, widget: QtWidgets.QStackedWidget):
+        super(SignalWindow, self).__init__()
+        self.window_initialized: bool = False
+        self.current_template = []
+        self.widget = widget
+        uic.loadUi("signal_page.ui", self)
+        self.current_video_filepath: str = ""
+
+    def get_current_video_filepath(self, signal_filepath) -> None:
+        self.current_video_filepath = signal_filepath
+        logging.info(f"Current video filepath in template window: {self.current_video_filepath}")
+
+
+    def start_processing_btn_callback(self) -> None:
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Warning)
+        msg.setText(f"Are you sure you want to start processing?")  # TODO - Add estimated time?
+        msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+        val = msg.exec_()
+        if val == QMessageBox.Ok:
+            self.start_processing()
+
     def start_processing(self) -> None:
-        print(f"Processing...")
+        pass
+
 
 
 def start() -> None:
@@ -418,14 +467,17 @@ def start() -> None:
     load_window = MainWindow(widget=widget)
     cal_window = CalibrationWindow(widget=widget)
     template_window = TemplateWindow(widget=widget)
+    signal_window = SignalWindow(widget=widget)
     widget.addWidget(load_window)
     widget.addWidget(cal_window)
     widget.addWidget(template_window)
+    widget.addWidget(signal_window)
     widget.setFixedHeight(830)
     widget.setFixedWidth(1277)
     widget.show()
     load_window.current_video_filepath.connect(cal_window.get_current_video_filepath)
     load_window.current_video_filepath.connect(template_window.get_current_video_filepath)
+    load_window.current_video_filepath.connect(signal_window.get_current_video_filepath)
     # load_window.current_csv_filepath.connect(cal_window.get_current_csv_filepath)
     app.exec_()
 

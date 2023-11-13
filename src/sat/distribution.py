@@ -15,7 +15,7 @@ __app_name__ = 'Spectrum Analyzer Tool'
 TEMP_EXE_DIRNAME = "data"  # This is the folder name that is stored in the "temp" folder when an executable version
 # of this application is run on a Windows OS.
 README_FILENAME = "README.md"
-
+#: TODO - https://stackoverflow.com/questions/59829470/pyinstaller-and-tesseract-ocr use for pytesseract
 
 #: Functions
 def build_distribution() -> None:
