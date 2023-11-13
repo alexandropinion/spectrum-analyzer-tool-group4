@@ -13,7 +13,7 @@ import load_page
 import sys
 from PyQt5 import QtWidgets, QtGui, QtCore
 from PyQt5.QtWidgets import QMainWindow, QApplication, QPushButton, QLabel, QFileDialog, QDialog, QWidget, QMessageBox, \
-    QTextEdit, QVBoxLayout, QColorDialog, QLCDNumber, QSlider
+    QTextEdit, QVBoxLayout, QColorDialog, QLCDNumber, QSlider, QToolButton
 from PyQt5 import uic
 from processor import get_video_config, cv2, get_frame_count, get_specific_frame, get_reference_frame, \
     crop_template_from_frame, parse_trace_from_frame, load_template_im, show_frame
@@ -21,43 +21,56 @@ from distribution import __app_name__, __app_version__
 
 #: Globals
 CONFIG_FILENAME: str = 'config.ini'
+DEFAULT_APP_WIDTH: int = 1277
+DEFAULT_APP_HEIGHT: int = 830
 
 
 class MainWindow(QMainWindow):
-    current_video_filepath: pyqtSignal = pyqtSignal(str)
-    current_csv_filepath: pyqtSignal = pyqtSignal(str)
+    current_video_filepath_signal: pyqtSignal = pyqtSignal(str)
+    current_csv_filepath_signal: pyqtSignal = pyqtSignal(str)
+    move_to_cal_window_signal: pyqtSignal = pyqtSignal(bool)
 
     def __init__(self, widget: QtWidgets.QStackedWidget):
         super(MainWindow, self).__init__()
         uic.loadUi("load_page.ui", self)
         self.setWindowTitle(f"Spectrum Analyzer Tool")
+        self.current_loaded_video_filepath: str = ""
         self.widget = widget
         self.load_video_btn = self.findChild(QPushButton, "loadVidBtn")
         self.load_video_btn.clicked.connect(self.load_video_btn_callback)
-        # self.csv_select_btn = self.findChild(QPushButton, "csvFilepathBtn")
-        # self.csv_select_btn.clicked.connect(self.csv_select_btn_callback)
+        self.start_processor_preset_btn = self.findChild(QToolButton, "startProcessorPresets")
+        self.start_processor_preset_btn.setStyleSheet("background-color : #D0D0D0")
+        self.start_processor_preset_btn.clicked.connect(self.start_processor_preset_btn_callback)
+        self.calibrate_processor_preset_btn = self.findChild(QToolButton, "calibrateProcessorPresets")
+        self.calibrate_processor_preset_btn.setStyleSheet("background-color : #D0D0D0")
+        self.calibrate_processor_preset_btn.clicked.connect(self.calibrate_processor_preset_btn_callback)
+        self.calibrate_processor_preset_btn.setDisabled(True)
+        self.start_processor_preset_btn.setDisabled(True)
         self.csv_textbox = self.findChild(QTextEdit, "csvFilepathLabel")
         self.ini_file_exists: bool = self.load_ini_file_to_app()
-        #self.setup_window_backgroud()
-        # oImage = QImage("background.jpg")
-        # sImage = oImage.scaled(QSize(300, 200))  # resize Image to widgets size
-        # palette = QPalette()
-        # palette.setBrush(QPalette.Window, QBrush(sImage))
-        # self.setPalette(palette)
-        #
-        # self.label = QLabel('Test', self)  # test, if it's really backgroundimage
-        # self.label.setGeometry(50, 50, 200, 50)
+        self.setup_window_backgroud()
 
+    def start_processor_preset_btn_callback(self) -> None:
+        start: bool = confirm(msg=f"Are you sure you want to start processing?")
+        if start:
+            run_processor()
+
+    def calibrate_processor_preset_btn_callback(self) -> None:
+        self.go_to_calibration_window(filepath=self.current_loaded_video_filepath)
 
     def setup_window_backgroud(self) -> None:
-        oImage = QImage("background.jpg")
-        sImage = oImage.scaled(QSize(300, 200))  # resize Image to widgets size
-        palette = QPalette()
-        palette.setBrush(QPalette.Window, QBrush(sImage))
-        self.setPalette(palette)
-
-        self.label = QLabel('Test', self)  # test, if it's really backgroundimage
-        self.label.setGeometry(50, 50, 200, 50)
+        background_width = 800
+        background_height = 600
+        self.setFixedWidth(background_width)
+        self.setFixedHeight(background_height)
+        stylesheet = '''
+            #MainWindow {
+                background-image: url(background.jpeg);
+                background-repeat: no-repeat;
+                background-position: center;
+            }
+        '''
+        self.setStyleSheet(stylesheet)
         self.show()
 
     def load_video_btn_callback(self) -> None:
@@ -70,7 +83,11 @@ class MainWindow(QMainWindow):
                 conf.set("app", "load_video_filepath", filepath)
                 with open(CONFIG_FILENAME, "w") as conf_file:
                     conf.write(conf_file)
-                self.go_to_calibration_window(filepath)
+                self.current_loaded_video_filepath = filepath
+                self.calibrate_processor_preset_btn.setDisabled(False)
+                self.start_processor_preset_btn.setDisabled(False)
+                self.start_processor_preset_btn.setStyleSheet("background-color : #98F7C3")
+                self.calibrate_processor_preset_btn.setStyleSheet("background-color : #FFFFDD")
             except Exception as e:
                 msg = QMessageBox()
                 msg.setIcon(QMessageBox.Critical)
@@ -82,7 +99,8 @@ class MainWindow(QMainWindow):
                 msg.exec_()
 
     def go_to_calibration_window(self, filepath: str) -> None:
-        self.current_video_filepath.emit(filepath)
+        self.current_video_filepath_signal.emit(filepath)
+        self.move_to_cal_window_signal.emit(True)
         self.widget.setCurrentIndex(1)
 
     def load_ini_file_to_app(self) -> bool:
@@ -119,6 +137,7 @@ class MainWindow(QMainWindow):
 
 
 class CalibrationWindow(QMainWindow):
+    go_to_template_window_signal = pyqtSignal(bool)
 
     def __init__(self, widget: QtWidgets.QStackedWidget):
         super(CalibrationWindow, self).__init__()
@@ -178,6 +197,7 @@ class CalibrationWindow(QMainWindow):
 
     def load_template_btn_callback(self) -> None:
         try:
+            self.go_to_template_window_signal.emit(True)
             self.widget.setCurrentIndex(2)
         except Exception as e:
             pass
@@ -210,6 +230,14 @@ class CalibrationWindow(QMainWindow):
         self.current_video_filepath = signal_filepath
         logging.info(f"Current video filepath: {self.current_video_filepath}")
         self.show_image()
+
+    @QtCore.pyqtSlot()
+    def moved_to_cal_window(self) -> None:
+        try:
+            self.setFixedWidth(DEFAULT_APP_WIDTH)
+            self.setFixedHeight(DEFAULT_APP_HEIGHT)
+        except Exception as e:
+            logging.info(f"Exception while displaying image: {e}")
 
     @QtCore.pyqtSlot()
     def show_image(self) -> None:
@@ -309,6 +337,13 @@ class TemplateWindow(QMainWindow):
         if new_min < 0:
             new_min = 0
         return round(new_min), round(new_max)
+
+    @QtCore.pyqtSlot()
+    def load_processed_images_to_window(self) -> None:
+        try:
+            self.template_slider_callback()
+        except Exception as e:
+            logging.info(f"Exception while displaying image: {e}")
 
     def trace_range_slider_callback(self) -> None:
         try:
@@ -425,8 +460,6 @@ class TemplateWindow(QMainWindow):
         self.widget.setCurrentIndex(1)
 
 
-
-
 class SignalWindow(QMainWindow):
 
     def __init__(self, widget: QtWidgets.QStackedWidget):
@@ -441,11 +474,10 @@ class SignalWindow(QMainWindow):
         self.current_video_filepath = signal_filepath
         logging.info(f"Current video filepath in template window: {self.current_video_filepath}")
 
-
     def start_processing_btn_callback(self) -> None:
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Warning)
-        msg.setText(f"Are you sure you want to start processing?")  # TODO - Add estimated time?
+        msg.setText(f"Are you sure you want to start processing?")
         msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
         val = msg.exec_()
         if val == QMessageBox.Ok:
@@ -454,6 +486,25 @@ class SignalWindow(QMainWindow):
     def start_processing(self) -> None:
         pass
 
+
+def confirm(msg: str) -> bool:
+    try:
+        msg_box = QMessageBox()
+        msg_box.setIcon(QMessageBox.Warning)
+        msg_box.setText(msg)
+        msg_box.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+        val = msg_box.exec_()
+        if val == QMessageBox.Ok:
+            return True
+        else:
+            return False
+    except Exception as e:
+        logging.critical(f"Issue while using confirmation box: {e}")
+        return False
+
+
+def run_processor() -> None:
+    pass
 
 
 def start() -> None:
@@ -472,12 +523,12 @@ def start() -> None:
     widget.addWidget(cal_window)
     widget.addWidget(template_window)
     widget.addWidget(signal_window)
-    widget.setFixedHeight(830)
-    widget.setFixedWidth(1277)
     widget.show()
-    load_window.current_video_filepath.connect(cal_window.get_current_video_filepath)
-    load_window.current_video_filepath.connect(template_window.get_current_video_filepath)
-    load_window.current_video_filepath.connect(signal_window.get_current_video_filepath)
+    load_window.move_to_cal_window_signal.connect(cal_window.moved_to_cal_window)
+    cal_window.go_to_template_window_signal.connect(template_window.load_processed_images_to_window)
+    load_window.current_video_filepath_signal.connect(cal_window.get_current_video_filepath)
+    load_window.current_video_filepath_signal.connect(template_window.get_current_video_filepath)
+    load_window.current_video_filepath_signal.connect(signal_window.get_current_video_filepath)
     # load_window.current_csv_filepath.connect(cal_window.get_current_csv_filepath)
     app.exec_()
 
