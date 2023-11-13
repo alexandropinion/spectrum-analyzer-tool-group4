@@ -13,7 +13,7 @@ import load_page
 import sys
 from PyQt5 import QtWidgets, QtGui, QtCore
 from PyQt5.QtWidgets import QMainWindow, QApplication, QPushButton, QLabel, QFileDialog, QDialog, QWidget, QMessageBox, \
-    QTextEdit, QVBoxLayout, QColorDialog, QLCDNumber, QSlider, QToolButton
+    QTextEdit, QVBoxLayout, QColorDialog, QLCDNumber, QSlider, QToolButton, QCheckBox
 from PyQt5 import uic
 from processor import get_video_config, cv2, get_frame_count, get_specific_frame, get_reference_frame, \
     crop_template_from_frame, parse_trace_from_frame, load_template_im, show_frame
@@ -104,36 +104,14 @@ class MainWindow(QMainWindow):
         self.widget.setCurrentIndex(1)
 
     def load_ini_file_to_app(self) -> bool:
-        """
-        if ini file doesnt exist, ignore
-        :return:
-        """
         try:
-
             with open(f"{CONFIG_FILENAME}") as config_file:
                 config = configparser.ConfigParser()
                 config.read_file(config_file)
                 self.csv_textbox.setText(config['app']['csv_output_directory'])
-
         except Exception as e:
             logging.info(e)
             return False
-
-    # def csv_select_btn_callback(self) -> None:
-    #     csv_directory = str(QFileDialog.getExistingDirectory(self, "Select Directory to save CSV data to:"))
-    #     logging.info(f"Location to save CSV file has been selected: {csv_directory}")
-    #     self.current_csv_filepath.emit(csv_directory)
-    #     self.csv_textbox.setText(csv_directory)
-    #
-    #     try:
-    #         conf = configparser.ConfigParser()
-    #         conf.read_file(open(CONFIG_FILENAME, 'r'))
-    #         conf.set("app", "csv_output_directory", csv_directory)
-    #         with open(CONFIG_FILENAME, "w") as conf_file:
-    #             conf.write(conf_file)
-    #
-    #     except Exception as e:
-    #         logging.info(f"Exception while selecting csv directory: {e}")
 
 
 class CalibrationWindow(QMainWindow):
@@ -469,6 +447,232 @@ class SignalWindow(QMainWindow):
         self.widget = widget
         uic.loadUi("signal_page.ui", self)
         self.current_video_filepath: str = ""
+
+        self.start_processor_btn = self.findChild(QPushButton, 'startProcessingBtn')
+        self.start_processor_btn.clicked.connect(self.start_processor_btn_callback)
+        self.go_back_btn = self.findChild(QPushButton, 'goBackBtn')
+        self.go_back_btn.clicked.connect(self.go_back_btn_callback)
+        self.scan_text_slider: QSlider = self.findChild(QSlider, "selectTextScanSlider")
+        self.scan_text_slider.valueChanged.connect(self.scan_text_slider_callback)
+        self.record_freq_dbm_checkbox = self.findChild(QCheckBox, "recordFreqDbm")
+        self.record_max_ampl_checkbox = self.findChild(QCheckBox, "recordMaxAmpl")
+        self.record_relative_ampl_checkbox = self.findChild(QCheckBox, "recordRelativeSignal")
+        self.record_freq_dbm_checkbox.clicked.connect(self.record_freq_dbm_checkbox_callback)
+        self.record_max_ampl_checkbox.clicked.connect(self.record_max_ampl_checkbox_callback)
+        self.record_relative_ampl_checkbox.clicked.connect(self.record_relative_ampl_checkbox_callback)
+        self.select_csv_filepath = self.findChild(QPushButton, "csvFilepathBtn")
+        self.select_csv_filepath.clicked.connect(self.select_csv_filepath_callback)
+        self.select_csv_filepath_text = self.findChild(QTextEdit, "csvFilepathLabel")
+
+        # Signal IDs
+        self.center_freq_id = self.findChild(QTextEdit, "centerFreqID")
+        self.span_freq_id = self.findChild(QTextEdit, "spanFreqID")
+        self.ref_level_id = self.findChild(QTextEdit, "ref_level_ID")
+        self.division_slider: QSlider = self.findChild(QSlider, "divisionSlider")
+        self.division_slider.sliderReleased.connect(self.division_slider_callback)
+        self.division_lcd = self.findChild(QLCDNumber, "divisionLcd")
+        self.threshold_lcd = self.findChild(QLCDNumber, "thresholdLcd")
+        self.scan_threshold_checkbox = self.findChild(QCheckBox, "scanThreshold")
+        self.scan_threshold_checkbox.clicked.connect(self.scan_threshold_checkbox_callback)
+        self.scan_threshold_slider: QSlider = self.findChild(QSlider, "thresholdSlider")
+        self.scan_threshold_slider.sliderReleased.connect(self.scan_threshold_slider_callback)
+        self.init_sliders()
+        self.initialize_signal_window()
+
+    def division_slider_callback(self) -> None:
+        try:
+            conf = configparser.ConfigParser()
+            conf.read_file(open(CONFIG_FILENAME, 'r'))
+            val = self.division_slider.value()
+            self.division_lcd.display(val)
+            conf.set("cal.signal", "total_db_divisions", str(val))
+            with open(CONFIG_FILENAME, "w") as conf_file:
+                conf.write(conf_file)
+        except Exception as e:
+            logging.critical(f"Issue scanning division slider: {e}")
+
+    def scan_threshold_slider_callback(self) -> None:
+        try:
+            conf = configparser.ConfigParser()
+            conf.read_file(open(CONFIG_FILENAME, 'r'))
+            val = self.scan_threshold_slider.value()
+            self.threshold_lcd.display(val)
+            conf.set("cal.signal", "threshold_percent", str(val))
+            with open(CONFIG_FILENAME, "w") as conf_file:
+                conf.write(conf_file)
+        except Exception as e:
+            logging.critical(f"Issue scanning threshold slider: {e}")
+
+    def init_sliders(self) -> None:
+        self.scan_threshold_slider.setMinimum(0)
+        self.scan_threshold_slider.setMaximum(100)
+        self.division_slider.setMinimum(5)
+        self.division_slider.setMaximum(20)
+        try:
+            with open(f"{CONFIG_FILENAME}") as config_file:
+                config = configparser.ConfigParser()
+                config.read_file(config_file)
+                self.division_slider.setValue(int(config['cal.signal']['total_db_divisions']))
+                self.division_lcd.display(int(config['cal.signal']['total_db_divisions']))
+                self.scan_threshold_slider.setValue(int(config['cal.signal']['threshold_percent']))
+                self.threshold_lcd.display(int(config['cal.signal']['threshold_percent']))
+                total_frames = int(config['cal.trace']['total_frames'])
+                self.scan_text_slider.setMinimum(0)
+                self.scan_text_slider.setMaximum(total_frames)
+        except Exception as e:
+            logging.info(f"Error while initializing trace rgb slider: {e}")
+
+    def scan_threshold_checkbox_callback(self) -> None:
+        is_checked = self.scan_threshold_checkbox.isChecked()
+        try:
+            conf = configparser.ConfigParser()
+            conf.read_file(open(CONFIG_FILENAME, 'r'))
+            val: int = 0
+            if is_checked:
+                val = 1
+            conf.set("cal.signal", "scan_relative_amplitude_threshold", str(val))
+            with open(CONFIG_FILENAME, "w") as conf_file:
+                conf.write(conf_file)
+        except Exception as e:
+            logging.critical(f"Issue scanning threshold checkbox: {e}")
+
+    def select_csv_filepath_callback(self) -> None:
+        csv_directory = str(QFileDialog.getExistingDirectory(self, "Select Directory to save CSV data to:"))
+        logging.info(f"Location to save CSV file has been selected: {csv_directory}")
+        self.select_csv_filepath_text.setText(csv_directory)
+        try:
+            conf = configparser.ConfigParser()
+            conf.read_file(open(CONFIG_FILENAME, 'r'))
+            conf.set("cal.signal", "csv_output_directory", csv_directory)
+            with open(CONFIG_FILENAME, "w") as conf_file:
+                conf.write(conf_file)
+        except Exception as e:
+            logging.info(f"Exception while selecting csv directory: {e}")
+
+    def record_freq_dbm_checkbox_callback(self) -> None:
+        is_checked = self.record_freq_dbm_checkbox.isChecked()
+        try:
+            conf = configparser.ConfigParser()
+            conf.read_file(open(CONFIG_FILENAME, 'r'))
+            val: int = 0
+            if is_checked:
+                val = 1
+            else:
+                if not self.record_max_ampl_checkbox.isChecked() and not self.record_relative_ampl_checkbox.isChecked():
+                    val = 1
+                    self.record_freq_dbm_checkbox.setChecked(True)  # Must have at least one checkbox selected
+            conf.set("cal.signal", "scan_relative_amplitude_threshold", str(val))
+            with open(CONFIG_FILENAME, "w") as conf_file:
+                conf.write(conf_file)
+        except Exception as e:
+            logging.critical(f"Issue scanning threshold checkbox: {e}")
+
+    def record_max_ampl_checkbox_callback(self) -> None:
+        is_checked = self.record_max_ampl_checkbox.isChecked()
+        try:
+            conf = configparser.ConfigParser()
+            conf.read_file(open(CONFIG_FILENAME, 'r'))
+            val: int = 0
+            if is_checked:
+                val = 1
+            else:
+                if not self.record_freq_dbm_checkbox.isChecked() and not self.record_relative_ampl_checkbox.isChecked():
+                    val = 1
+                    self.record_max_ampl_checkbox.setChecked(True)  # Must have at least one checkbox selected
+            conf.set("cal.signal", "record_only_max_signal_with_scaling_factors", str(val))
+            with open(CONFIG_FILENAME, "w") as conf_file:
+                conf.write(conf_file)
+        except Exception as e:
+            logging.critical(f"Issue scanning threshold checkbox: {e}")
+
+    def record_relative_ampl_checkbox_callback(self) -> None:
+        is_checked = self.record_relative_ampl_checkbox.isChecked()
+        try:
+            conf = configparser.ConfigParser()
+            conf.read_file(open(CONFIG_FILENAME, 'r'))
+            val: int = 0
+            if is_checked:
+                val = 1
+            else:
+                if not self.record_freq_dbm_checkbox.isChecked() and not self.record_max_ampl_checkbox.isChecked():
+                    val = 1
+                    self.record_relative_ampl_checkbox.setChecked(True)  # Must have at least one checkbox selected
+            conf.set("cal.signal", "record_entire_signal_with_no_scaling_factors", str(val))
+            with open(CONFIG_FILENAME, "w") as conf_file:
+                conf.write(conf_file)
+        except Exception as e:
+            logging.critical(f"Issue scanning threshold checkbox: {e}")
+
+    def scan_text_slider_callback(self) -> None:
+        pass
+
+    def go_back_btn_callback(self) -> None:
+        self.widget.setCurrentIndex(2)
+
+    def start_processor_btn_callback(self) -> None:
+        pass
+
+    def initialize_signal_window(self) -> None:
+
+        try:
+            conf = configparser.ConfigParser()
+            conf.read_file(open(CONFIG_FILENAME, 'r'))
+            center_freq_text = str(conf['cal.signal']['center_freq_text'])
+            reference_level_text = str(conf['cal.signal']['reference_level_text'])
+            span_text = str(conf['cal.signal']['span_text'])
+            total_db_divisions = int(conf['cal.signal']['total_db_divisions'])
+            csv_output_directory = str(conf['cal.signal']['csv_output_directory'])
+            record_entire_signal_with_scaling_factors = (
+                int(conf['cal.signal']['record_entire_signal_with_scaling_factors']))
+            record_only_max_signal_with_scaling_factors = (
+                int(conf['cal.signal']['record_entire_signal_with_scaling_factors']))
+            record_entire_signal_with_no_scaling_factors = (
+                int(conf['cal.signal']['record_entire_signal_with_scaling_factors']))
+            scan_relative_amplitude_threshold = (
+                int(conf['cal.signal']['scan_relative_amplitude_threshold']))
+            if record_entire_signal_with_no_scaling_factors == 1:
+                self.record_relative_ampl_checkbox.setChecked(True)
+            else:
+                self.record_relative_ampl_checkbox.setChecked(False)
+            if record_only_max_signal_with_scaling_factors == 1:
+                self.record_max_ampl_checkbox.setChecked(True)
+            else:
+                self.record_max_ampl_checkbox.setChecked(False)
+            if record_entire_signal_with_scaling_factors == 1:
+                self.record_freq_dbm_checkbox.setChecked(True)
+            else:
+                self.record_freq_dbm_checkbox.setChecked(False)
+            if scan_relative_amplitude_threshold == 1:
+                self.scan_threshold_checkbox.setChecked(True)
+            else:
+                self.scan_threshold_checkbox.setChecked(False)
+
+            self.select_csv_filepath_text.setText(csv_output_directory)
+            self.center_freq_id.setText(center_freq_text)
+            self.span_freq_id.setText(span_text)
+            self.ref_level_id.setText(reference_level_text)
+            self.division_slider.setValue(total_db_divisions)
+
+            self.start_processor_btn.setStyleSheet("background-color : #62FFAD")
+
+            # self.center_freq_id = self.findChild(QTextEdit, "centerFreqID")
+            # # self.center_freq_id.textChanged.connect(self.center_freq_id_callback)
+            #
+            # self.span_freq_id = self.findChild(QTextEdit, "spanFreqID")
+            # self.ref_level_id = self.findChild(QTextEdit, "ref_level_ID")
+            # self.division_slider = self.findChild(QSlider, "divisionSlider")
+            # self.division_lcd = self.findChild(QLCDNumber, "divisionLcd")
+            # [cal.signal]
+            # center_freq_text = CENTER
+            # reference_level_text = RF
+            # span_text = SPAN
+            # total_db_divisions = 10
+            # csv_output_directory = C: / Users / snipe / OneDrive / Desktop / SAT
+            # record_entire_signal_with_scaling_factors = 1
+            # record_only_max_signal_with_scaling_factors = 1
+            # record_entire_signal_with_no_scaling_factors = 1
+        except Exception as e:
+            logging.critical(f"Issue while initializing the signal window: {e}")
 
     def get_current_video_filepath(self, signal_filepath) -> None:
         self.current_video_filepath = signal_filepath
