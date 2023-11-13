@@ -23,6 +23,8 @@ from distribution import __app_name__, __app_version__
 CONFIG_FILENAME: str = 'config.ini'
 DEFAULT_APP_WIDTH: int = 1277
 DEFAULT_APP_HEIGHT: int = 830
+DEFAULT_MAIN_WINDOW_WIDTH: int = 800
+DEFAULT_MAIN_WINDOW_HEIGHT: int = 600
 
 
 class MainWindow(QMainWindow):
@@ -59,10 +61,8 @@ class MainWindow(QMainWindow):
         self.go_to_calibration_window(filepath=self.current_loaded_video_filepath)
 
     def setup_window_backgroud(self) -> None:
-        background_width = 800
-        background_height = 600
-        self.setFixedWidth(background_width)
-        self.setFixedHeight(background_height)
+        self.setFixedWidth(DEFAULT_MAIN_WINDOW_WIDTH)
+        self.setFixedHeight(DEFAULT_MAIN_WINDOW_HEIGHT)
         stylesheet = '''
             #MainWindow {
                 background-image: url(background.jpeg);
@@ -128,6 +128,8 @@ class CalibrationWindow(QMainWindow):
         self.current_video_filepath: str = ''
         self.back_btn = self.findChild(QPushButton, "backBtn")
         self.back_btn.clicked.connect(self.back_btn_callback)
+
+        self.back_btn.setStyleSheet("background-color : #FF9C6D")
         self.red_lcd: QLCDNumber = self.findChild(QLCDNumber, "rColor")
         self.green_lcd: QLCDNumber = self.findChild(QLCDNumber, "gColor")
         self.blue_lcd: QLCDNumber = self.findChild(QLCDNumber, "bColor")
@@ -136,6 +138,7 @@ class CalibrationWindow(QMainWindow):
         self.frame_slider.valueChanged.connect(self.frame_slider_callback)
         self.load_template_btn = self.findChild(QPushButton, "loadTemplateBtn")
         self.load_template_btn.clicked.connect(self.load_template_btn_callback)
+        self.load_template_btn.setStyleSheet("background-color : #62FFAD")
 
     def set_lcd_values(self, r: int, g: int, b: int) -> None:
         self.red_lcd.display(r)
@@ -212,8 +215,8 @@ class CalibrationWindow(QMainWindow):
     @QtCore.pyqtSlot()
     def moved_to_cal_window(self) -> None:
         try:
-            self.setFixedWidth(DEFAULT_APP_WIDTH)
-            self.setFixedHeight(DEFAULT_APP_HEIGHT)
+            self.widget.setFixedWidth(DEFAULT_APP_WIDTH)
+            self.widget.setFixedHeight(DEFAULT_APP_HEIGHT)
         except Exception as e:
             logging.info(f"Exception while displaying image: {e}")
 
@@ -236,6 +239,8 @@ class CalibrationWindow(QMainWindow):
         self.frame_label.setPixmap(QtGui.QPixmap.fromImage(converted_img))
 
     def back_btn_callback(self) -> None:
+        self.widget.setFixedWidth(DEFAULT_MAIN_WINDOW_WIDTH)
+        self.widget.setFixedHeight(DEFAULT_MAIN_WINDOW_HEIGHT)
         self.widget.setCurrentIndex(0)
 
 
@@ -250,8 +255,10 @@ class TemplateWindow(QMainWindow):
 
         self.next_page_btn = self.findChild(QPushButton, 'nextPageBtn')
         self.next_page_btn.clicked.connect(self.next_page_btn_callback)
+        self.next_page_btn.setStyleSheet("background-color : #62FFAD")
         self.template_back_btn = self.findChild(QPushButton, 'templateBackBtn')
         self.template_back_btn.clicked.connect(self.template_back_btn_callback)
+        self.template_back_btn.setStyleSheet("background-color : #FF9C6D")
         self.load_template_btn = self.findChild(QPushButton, 'loadTemplateBtn')
         self.load_template_btn.clicked.connect(self.load_template_btn_callback)
         self.template_slider: QSlider = self.findChild(QSlider, "templateSlider")
@@ -652,25 +659,9 @@ class SignalWindow(QMainWindow):
             self.span_freq_id.setText(span_text)
             self.ref_level_id.setText(reference_level_text)
             self.division_slider.setValue(total_db_divisions)
-
             self.start_processor_btn.setStyleSheet("background-color : #62FFAD")
+            self.go_back_btn.setStyleSheet("background-color : #FF9C6D")
 
-            # self.center_freq_id = self.findChild(QTextEdit, "centerFreqID")
-            # # self.center_freq_id.textChanged.connect(self.center_freq_id_callback)
-            #
-            # self.span_freq_id = self.findChild(QTextEdit, "spanFreqID")
-            # self.ref_level_id = self.findChild(QTextEdit, "ref_level_ID")
-            # self.division_slider = self.findChild(QSlider, "divisionSlider")
-            # self.division_lcd = self.findChild(QLCDNumber, "divisionLcd")
-            # [cal.signal]
-            # center_freq_text = CENTER
-            # reference_level_text = RF
-            # span_text = SPAN
-            # total_db_divisions = 10
-            # csv_output_directory = C: / Users / snipe / OneDrive / Desktop / SAT
-            # record_entire_signal_with_scaling_factors = 1
-            # record_only_max_signal_with_scaling_factors = 1
-            # record_entire_signal_with_no_scaling_factors = 1
         except Exception as e:
             logging.critical(f"Issue while initializing the signal window: {e}")
 
