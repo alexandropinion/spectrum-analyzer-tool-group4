@@ -31,7 +31,7 @@
      </font>
     </property>
     <property name="text">
-     <string>Select Signal Process Decisions:</string>
+     <string>Configure Signal Processing:</string>
     </property>
    </widget>
    <widget class="QGroupBox" name="groupBox">
@@ -40,7 +40,7 @@
       <x>20</x>
       <y>100</y>
       <width>491</width>
-      <height>391</height>
+      <height>331</height>
      </rect>
     </property>
     <property name="title">
@@ -89,7 +89,7 @@
      <property name="geometry">
       <rect>
        <x>20</x>
-       <y>320</y>
+       <y>270</y>
        <width>451</width>
        <height>51</height>
       </rect>
@@ -112,7 +112,7 @@
      <property name="geometry">
       <rect>
        <x>20</x>
-       <y>260</y>
+       <y>220</y>
        <width>451</width>
        <height>51</height>
       </rect>
@@ -153,9 +153,9 @@
     <property name="geometry">
      <rect>
       <x>20</x>
-      <y>510</y>
+      <y>450</y>
       <width>491</width>
-      <height>281</height>
+      <height>341</height>
      </rect>
     </property>
     <property name="title">
@@ -253,7 +253,7 @@
      <property name="geometry">
       <rect>
        <x>410</x>
-       <y>200</y>
+       <y>190</y>
        <width>61</width>
        <height>61</height>
       </rect>
@@ -282,6 +282,61 @@
       <bool>true</bool>
      </property>
     </widget>
+    <widget class="QSlider" name="divisionPerDbSlider">
+     <property name="geometry">
+      <rect>
+       <x>160</x>
+       <y>290</y>
+       <width>231</width>
+       <height>22</height>
+      </rect>
+     </property>
+     <property name="minimum">
+      <number>1</number>
+     </property>
+     <property name="maximum">
+      <number>50</number>
+     </property>
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+     <property name="tickPosition">
+      <enum>QSlider::TicksBothSides</enum>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_14">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>280</y>
+       <width>131</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>dB per Division</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+    <widget class="QLCDNumber" name="dbPerDivLED">
+     <property name="geometry">
+      <rect>
+       <x>410</x>
+       <y>270</y>
+       <width>61</width>
+       <height>61</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>12</pointsize>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+    </widget>
    </widget>
    <widget class="QGroupBox" name="groupBox_3">
     <property name="geometry">
@@ -289,7 +344,7 @@
       <x>540</x>
       <y>110</y>
       <width>511</width>
-      <height>381</height>
+      <height>321</height>
      </rect>
     </property>
     <property name="title">
@@ -299,9 +354,9 @@
      <property name="geometry">
       <rect>
        <x>20</x>
-       <y>40</y>
-       <width>461</width>
-       <height>301</height>
+       <y>20</y>
+       <width>471</width>
+       <height>281</height>
       </rect>
      </property>
      <property name="text">
@@ -329,9 +384,9 @@
     <property name="geometry">
      <rect>
       <x>550</x>
-      <y>10</y>
+      <y>30</y>
       <width>261</width>
-      <height>81</height>
+      <height>31</height>
      </rect>
     </property>
     <property name="font">
@@ -345,28 +400,11 @@
      <string>Select Frame:</string>
     </property>
    </widget>
-   <widget class="QLCDNumber" name="centerFreq">
-    <property name="geometry">
-     <rect>
-      <x>1170</x>
-      <y>120</y>
-      <width>81</width>
-      <height>71</height>
-     </rect>
-    </property>
-    <property name="font">
-     <font>
-      <pointsize>12</pointsize>
-      <weight>75</weight>
-      <bold>true</bold>
-     </font>
-    </property>
-   </widget>
    <widget class="QLabel" name="label_6">
     <property name="geometry">
      <rect>
-      <x>1060</x>
-      <y>150</y>
+      <x>1050</x>
+      <y>140</y>
       <width>101</width>
       <height>20</height>
      </rect>
@@ -375,58 +413,24 @@
      <string>Center Freq (ghz):</string>
     </property>
    </widget>
-   <widget class="QLCDNumber" name="spanFreq">
-    <property name="geometry">
-     <rect>
-      <x>1170</x>
-      <y>210</y>
-      <width>81</width>
-      <height>71</height>
-     </rect>
-    </property>
-    <property name="font">
-     <font>
-      <pointsize>12</pointsize>
-      <weight>75</weight>
-      <bold>true</bold>
-     </font>
-    </property>
-   </widget>
    <widget class="QLabel" name="label_7">
     <property name="geometry">
      <rect>
       <x>1060</x>
-      <y>240</y>
+      <y>270</y>
       <width>101</width>
       <height>20</height>
      </rect>
     </property>
     <property name="text">
-     <string>Span Freq (mhz):</string>
-    </property>
-   </widget>
-   <widget class="QLCDNumber" name="refLevel">
-    <property name="geometry">
-     <rect>
-      <x>1170</x>
-      <y>310</y>
-      <width>81</width>
-      <height>71</height>
-     </rect>
-    </property>
-    <property name="font">
-     <font>
-      <pointsize>12</pointsize>
-      <weight>75</weight>
-      <bold>true</bold>
-     </font>
+     <string>Span Freq (ghz):</string>
     </property>
    </widget>
    <widget class="QLabel" name="label_8">
     <property name="geometry">
      <rect>
       <x>1060</x>
-      <y>330</y>
+      <y>390</y>
       <width>101</width>
       <height>20</height>
      </rect>
@@ -439,9 +443,9 @@
     <property name="geometry">
      <rect>
       <x>900</x>
-      <y>510</y>
+      <y>450</y>
       <width>351</width>
-      <height>281</height>
+      <height>341</height>
      </rect>
     </property>
     <property name="title">
@@ -453,7 +457,7 @@
        <x>20</x>
        <y>40</y>
        <width>321</width>
-       <height>51</height>
+       <height>131</height>
       </rect>
      </property>
      <property name="font">
@@ -469,9 +473,9 @@
      <property name="geometry">
       <rect>
        <x>20</x>
-       <y>120</y>
+       <y>180</y>
        <width>321</width>
-       <height>111</height>
+       <height>141</height>
       </rect>
      </property>
      <property name="font">
@@ -484,43 +488,13 @@
      </property>
     </widget>
    </widget>
-   <widget class="QLCDNumber" name="dbPerDivLED">
-    <property name="geometry">
-     <rect>
-      <x>1170</x>
-      <y>410</y>
-      <width>81</width>
-      <height>71</height>
-     </rect>
-    </property>
-    <property name="font">
-     <font>
-      <pointsize>12</pointsize>
-      <weight>75</weight>
-      <bold>true</bold>
-     </font>
-    </property>
-   </widget>
-   <widget class="QLabel" name="label_10">
-    <property name="geometry">
-     <rect>
-      <x>1060</x>
-      <y>430</y>
-      <width>101</width>
-      <height>20</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>dB per Division:</string>
-    </property>
-   </widget>
    <widget class="QGroupBox" name="groupBox_5">
     <property name="geometry">
      <rect>
       <x>540</x>
-      <y>510</y>
+      <y>450</y>
       <width>351</width>
-      <height>281</height>
+      <height>341</height>
      </rect>
     </property>
     <property name="title">
@@ -530,7 +504,7 @@
      <property name="geometry">
       <rect>
        <x>20</x>
-       <y>20</y>
+       <y>30</y>
        <width>311</width>
        <height>81</height>
       </rect>
@@ -542,7 +516,7 @@
       </font>
      </property>
      <property name="text">
-      <string>As an optional feature, the user can have the processor scan each trace values relative y position on each screen capture to see if it exceeds a value. Acceptable ranges are from 0 to 1.0</string>
+      <string>As an optional feature, the user can have the processor scan each trace values relative y position on each screen capture to see if it exceeds a value. Acceptable ranges are from 0 to 100%</string>
      </property>
      <property name="wordWrap">
       <bool>true</bool>
@@ -552,7 +526,7 @@
      <property name="geometry">
       <rect>
        <x>20</x>
-       <y>110</y>
+       <y>130</y>
        <width>281</width>
        <height>61</height>
       </rect>
@@ -565,7 +539,7 @@
      <property name="geometry">
       <rect>
        <x>260</x>
-       <y>200</y>
+       <y>240</y>
        <width>61</width>
        <height>61</height>
       </rect>
@@ -577,12 +551,18 @@
        <bold>true</bold>
       </font>
      </property>
+     <property name="smallDecimalPoint">
+      <bool>false</bool>
+     </property>
+     <property name="segmentStyle">
+      <enum>QLCDNumber::Flat</enum>
+     </property>
     </widget>
     <widget class="QSlider" name="thresholdSlider">
      <property name="geometry">
       <rect>
        <x>20</x>
-       <y>220</y>
+       <y>260</y>
        <width>221</width>
        <height>22</height>
       </rect>
@@ -601,7 +581,7 @@
      <property name="geometry">
       <rect>
        <x>330</x>
-       <y>210</y>
+       <y>250</y>
        <width>16</width>
        <height>41</height>
       </rect>
@@ -617,7 +597,7 @@
      <property name="geometry">
       <rect>
        <x>20</x>
-       <y>170</y>
+       <y>200</y>
        <width>181</width>
        <height>41</height>
       </rect>
@@ -629,6 +609,99 @@
       <bool>true</bool>
      </property>
     </widget>
+   </widget>
+   <widget class="QLabel" name="refLevel">
+    <property name="geometry">
+     <rect>
+      <x>1160</x>
+      <y>360</y>
+      <width>91</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <family>ROG Fonts</family>
+      <pointsize>14</pointsize>
+     </font>
+    </property>
+    <property name="layoutDirection">
+     <enum>Qt::RightToLeft</enum>
+    </property>
+    <property name="autoFillBackground">
+     <bool>true</bool>
+    </property>
+    <property name="text">
+     <string>0.00</string>
+    </property>
+    <property name="scaledContents">
+     <bool>false</bool>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
+    </property>
+   </widget>
+   <widget class="QLabel" name="spanFreq">
+    <property name="geometry">
+     <rect>
+      <x>1160</x>
+      <y>240</y>
+      <width>91</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <family>ROG Fonts</family>
+      <pointsize>14</pointsize>
+     </font>
+    </property>
+    <property name="layoutDirection">
+     <enum>Qt::RightToLeft</enum>
+    </property>
+    <property name="autoFillBackground">
+     <bool>true</bool>
+    </property>
+    <property name="text">
+     <string>0.00</string>
+    </property>
+    <property name="scaledContents">
+     <bool>false</bool>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
+    </property>
+   </widget>
+   <widget class="QLabel" name="centerFreq">
+    <property name="geometry">
+     <rect>
+      <x>1160</x>
+      <y>110</y>
+      <width>91</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <family>ROG Fonts</family>
+      <pointsize>14</pointsize>
+     </font>
+    </property>
+    <property name="layoutDirection">
+     <enum>Qt::RightToLeft</enum>
+    </property>
+    <property name="autoFillBackground">
+     <bool>true</bool>
+    </property>
+    <property name="text">
+     <string>0.00</string>
+    </property>
+    <property name="scaledContents">
+     <bool>false</bool>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
+    </property>
    </widget>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>

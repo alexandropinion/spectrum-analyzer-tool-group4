@@ -16,7 +16,8 @@ from PyQt5.QtWidgets import QMainWindow, QApplication, QPushButton, QLabel, QFil
     QTextEdit, QVBoxLayout, QColorDialog, QLCDNumber, QSlider, QToolButton, QCheckBox
 from PyQt5 import uic
 from processor import get_video_config, cv2, get_frame_count, get_specific_frame, get_reference_frame, \
-    crop_template_from_frame, parse_trace_from_frame, load_template_im, show_frame
+    crop_template_from_frame, parse_trace_from_frame, load_template_im, show_frame, get_center_freq_and_ref_level, \
+    draw_boxes_around_text_in_frame
 from distribution import __app_name__, __app_version__
 
 #: Globals
@@ -454,13 +455,14 @@ class SignalWindow(QMainWindow):
         self.widget = widget
         uic.loadUi("signal_page.ui", self)
         self.current_video_filepath: str = ""
-
+        self.current_template_filepath: str = ""
+        self.signal_frame_label = self.findChild(QLabel, "signalImage")
         self.start_processor_btn = self.findChild(QPushButton, 'startProcessingBtn')
         self.start_processor_btn.clicked.connect(self.start_processor_btn_callback)
         self.go_back_btn = self.findChild(QPushButton, 'goBackBtn')
         self.go_back_btn.clicked.connect(self.go_back_btn_callback)
         self.scan_text_slider: QSlider = self.findChild(QSlider, "selectTextScanSlider")
-        self.scan_text_slider.valueChanged.connect(self.scan_text_slider_callback)
+        self.scan_text_slider.sliderReleased.connect(self.scan_text_slider_callback)
         self.record_freq_dbm_checkbox = self.findChild(QCheckBox, "recordFreqDbm")
         self.record_max_ampl_checkbox = self.findChild(QCheckBox, "recordMaxAmpl")
         self.record_relative_ampl_checkbox = self.findChild(QCheckBox, "recordRelativeSignal")
@@ -477,14 +479,38 @@ class SignalWindow(QMainWindow):
         self.ref_level_id = self.findChild(QTextEdit, "ref_level_ID")
         self.division_slider: QSlider = self.findChild(QSlider, "divisionSlider")
         self.division_slider.sliderReleased.connect(self.division_slider_callback)
-        self.division_lcd = self.findChild(QLCDNumber, "divisionLcd")
+        self.division_lcd: QLCDNumber = self.findChild(QLCDNumber, "divisionLcd")
+        self.division_per_db_lcd: QLCDNumber = self.findChild(QLCDNumber, "dbPerDivLED")
         self.threshold_lcd = self.findChild(QLCDNumber, "thresholdLcd")
         self.scan_threshold_checkbox = self.findChild(QCheckBox, "scanThreshold")
         self.scan_threshold_checkbox.clicked.connect(self.scan_threshold_checkbox_callback)
         self.scan_threshold_slider: QSlider = self.findChild(QSlider, "thresholdSlider")
         self.scan_threshold_slider.sliderReleased.connect(self.scan_threshold_slider_callback)
+        self.division_per_db_slider: QSlider = self.findChild(QSlider, "divisionPerDbSlider")
+        self.division_per_db_slider.sliderReleased.connect(self.division_per_db_slider_callback)
+
+        # LCDs for signal characteristics
+        self.center_freq_lcd: QLabel = self.findChild(QLabel, "centerFreq")
+        self.span_freq_lcd: QLabel = self.findChild(QLabel, "spanFreq")
+        self.ref_lvl_lcd: QLabel = self.findChild(QLabel, "refLevel")
+        self.current_center_freq: int = 0
+        self.current_span_freq: int = 0
+        self.current_ref_lvl: int = 0
+
         self.init_sliders()
         self.initialize_signal_window()
+
+    def division_per_db_slider_callback(self) -> None:
+        try:
+            conf = configparser.ConfigParser()
+            conf.read_file(open(CONFIG_FILENAME, 'r'))
+            val = self.division_per_db_slider.value()
+            self.division_per_db_lcd.display(int(val))
+            conf.set("cal.signal", "db_per_division", str(val))
+            with open(CONFIG_FILENAME, "w") as conf_file:
+                conf.write(conf_file)
+        except Exception as e:
+            logging.critical(f"Issue while using division per slider callback: {e}")
 
     def division_slider_callback(self) -> None:
         try:
@@ -515,10 +541,14 @@ class SignalWindow(QMainWindow):
         self.scan_threshold_slider.setMaximum(100)
         self.division_slider.setMinimum(5)
         self.division_slider.setMaximum(20)
+        self.division_per_db_slider.setMaximum(50)
+        self.division_per_db_slider.setMinimum(1)
         try:
             with open(f"{CONFIG_FILENAME}") as config_file:
                 config = configparser.ConfigParser()
                 config.read_file(config_file)
+                self.division_per_db_slider.setValue(int(config['cal.signal']['db_per_division']))
+                self.division_per_db_lcd.display(int(config['cal.signal']['db_per_division']))
                 self.division_slider.setValue(int(config['cal.signal']['total_db_divisions']))
                 self.division_lcd.display(int(config['cal.signal']['total_db_divisions']))
                 self.scan_threshold_slider.setValue(int(config['cal.signal']['threshold_percent']))
@@ -559,6 +589,7 @@ class SignalWindow(QMainWindow):
     def record_freq_dbm_checkbox_callback(self) -> None:
         is_checked = self.record_freq_dbm_checkbox.isChecked()
         try:
+            print(f"record_freq_dbm: {is_checked}")
             conf = configparser.ConfigParser()
             conf.read_file(open(CONFIG_FILENAME, 'r'))
             val: int = 0
@@ -568,7 +599,7 @@ class SignalWindow(QMainWindow):
                 if not self.record_max_ampl_checkbox.isChecked() and not self.record_relative_ampl_checkbox.isChecked():
                     val = 1
                     self.record_freq_dbm_checkbox.setChecked(True)  # Must have at least one checkbox selected
-            conf.set("cal.signal", "scan_relative_amplitude_threshold", str(val))
+            conf.set("cal.signal", "record_entire_signal_with_scaling_factors", str(val))
             with open(CONFIG_FILENAME, "w") as conf_file:
                 conf.write(conf_file)
         except Exception as e:
@@ -576,6 +607,7 @@ class SignalWindow(QMainWindow):
 
     def record_max_ampl_checkbox_callback(self) -> None:
         is_checked = self.record_max_ampl_checkbox.isChecked()
+        print(f"record_max_dbm: {is_checked}")
         try:
             conf = configparser.ConfigParser()
             conf.read_file(open(CONFIG_FILENAME, 'r'))
@@ -594,6 +626,7 @@ class SignalWindow(QMainWindow):
 
     def record_relative_ampl_checkbox_callback(self) -> None:
         is_checked = self.record_relative_ampl_checkbox.isChecked()
+        print(f"record_relative_dbm: {is_checked}")
         try:
             conf = configparser.ConfigParser()
             conf.read_file(open(CONFIG_FILENAME, 'r'))
@@ -611,7 +644,47 @@ class SignalWindow(QMainWindow):
             logging.critical(f"Issue scanning threshold checkbox: {e}")
 
     def scan_text_slider_callback(self) -> None:
-        pass
+        try:
+            center_freq_id = self.center_freq_id.toPlainText()
+            span_freq_id = self.span_freq_id.toPlainText()
+            ref_level_id = self.ref_level_id.toPlainText()
+            frame = get_specific_frame(filepath=self.current_video_filepath,
+                                       frame_num=int(self.scan_text_slider.value()))
+            success, ref_lvl, center_freq, span_freq = get_center_freq_and_ref_level(
+                frame=frame, center_freq_tag=center_freq_id,
+                reference_level_tag=ref_level_id, span_tag=span_freq_id)
+
+            frame_with_boxes_around_tags = (
+                draw_boxes_around_text_in_frame(frame=frame,
+                                                text_to_find=[ref_level_id,
+                                                              span_freq_id,
+                                                              center_freq_id]))
+
+            converted_img = QImage(
+                frame_with_boxes_around_tags, frame_with_boxes_around_tags.shape[1],
+                frame_with_boxes_around_tags.shape[0], QImage.Format.Format_BGR888)
+            converted_img = converted_img.scaled(self.signal_frame_label.width(), self.signal_frame_label.height(),
+                                                 QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                                                 QtCore.Qt.TransformationMode.SmoothTransformation)
+            self.signal_frame_label.setPixmap(QtGui.QPixmap.fromImage(converted_img))
+            if success:
+                logging.info(f"success reading levels: {success}\n"
+                             f"ref lvl = {ref_lvl}\n"
+                             f"center freq = {center_freq}\n"
+                             f"span freq = {span_freq}")
+                self.set_label_to_digits(value=center_freq / 1e9, label=self.center_freq_lcd)
+                self.set_label_to_digits(value=span_freq / 1e9, label=self.span_freq_lcd)
+                self.set_label_to_digits(value=ref_lvl / 1e9, label=self.ref_lvl_lcd)
+                self.current_center_freq = center_freq
+                self.current_span_freq = span_freq
+                self.current_ref_lvl = ref_lvl
+
+        except Exception as e:
+            logging.critical(f"Issue while scanning text slider: {e}")
+
+    @staticmethod
+    def set_label_to_digits(value: float, label: QLabel) -> None:
+        label.setText('{:.02f}'.format(value))
 
     def go_back_btn_callback(self) -> None:
         self.widget.setCurrentIndex(2)
@@ -620,10 +693,10 @@ class SignalWindow(QMainWindow):
         pass
 
     def initialize_signal_window(self) -> None:
-
         try:
             conf = configparser.ConfigParser()
             conf.read_file(open(CONFIG_FILENAME, 'r'))
+            db_per_division = int(conf['cal.signal']['db_per_division'])
             center_freq_text = str(conf['cal.signal']['center_freq_text'])
             reference_level_text = str(conf['cal.signal']['reference_level_text'])
             span_text = str(conf['cal.signal']['span_text'])
@@ -632,9 +705,9 @@ class SignalWindow(QMainWindow):
             record_entire_signal_with_scaling_factors = (
                 int(conf['cal.signal']['record_entire_signal_with_scaling_factors']))
             record_only_max_signal_with_scaling_factors = (
-                int(conf['cal.signal']['record_entire_signal_with_scaling_factors']))
+                int(conf['cal.signal']['record_only_max_signal_with_scaling_factors']))
             record_entire_signal_with_no_scaling_factors = (
-                int(conf['cal.signal']['record_entire_signal_with_scaling_factors']))
+                int(conf['cal.signal']['record_entire_signal_with_no_scaling_factors']))
             scan_relative_amplitude_threshold = (
                 int(conf['cal.signal']['scan_relative_amplitude_threshold']))
             if record_entire_signal_with_no_scaling_factors == 1:
@@ -659,8 +732,12 @@ class SignalWindow(QMainWindow):
             self.span_freq_id.setText(span_text)
             self.ref_level_id.setText(reference_level_text)
             self.division_slider.setValue(total_db_divisions)
+            self.division_per_db_slider.setValue(db_per_division)
+            # self.division_per_db_lcd.dislay(db_per_division)
             self.start_processor_btn.setStyleSheet("background-color : #62FFAD")
             self.go_back_btn.setStyleSheet("background-color : #FF9C6D")
+            self.current_template_filepath = str(conf['cal.template']['cal_template_filepath'])
+            self.current_template.append(load_template_im(template_img_fp=self.current_template_filepath))
 
         except Exception as e:
             logging.critical(f"Issue while initializing the signal window: {e}")
