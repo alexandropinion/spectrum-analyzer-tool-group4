@@ -194,10 +194,10 @@ class Processor(object):
         reference_img, height_template, width_template, size, template_grayscale = (
             get_reference_frame(frame=frame, template=template))
 
-        cropped_img = crop_template_from_frame(reference_frame=reference_img,
-                                               template=template_grayscale,
-                                               template_width=width_template,
-                                               template_height=height_template)
+        cropped_img, inverse_cropped_img = crop_template_from_frame(reference_frame=reference_img,
+                                                                    template=template_grayscale,
+                                                                    template_width=width_template,
+                                                                    template_height=height_template)
 
         under_threshold, coordinates = (
             self.scan_for_dbm_threshold(frame=cropped_img,
@@ -212,11 +212,12 @@ class Processor(object):
                                         record_scaled_coordinate=record_scaled_coordinate,
                                         record_relative_coordinate=record_relative_coordinate
                                         ))
-        if record_max_coordinate or record_scaled_coordinate:
-            successful, center_freq, reference_level, span_freq = get_center_freq_and_ref_level(
-                frame=reference_img, center_freq_tag=self.cf_tag,
-                reference_level_tag=self.ref_lvl_tag, span_tag=self.span_tag)
 
+        if record_max_coordinate or record_scaled_coordinate:
+            successful, center_freq, reference_level, span_freq = (
+                get_center_freq_and_ref_level(
+                    frame=inverse_cropped_img, center_freq_tag=self.cf_tag,
+                    reference_level_tag=self.ref_lvl_tag, span_tag=self.span_tag))
         return under_threshold
 
     def scan_for_dbm_threshold(self,
@@ -339,8 +340,8 @@ def get_reference_frame(frame: ndarray, template: ndarray) -> tuple[Mat | ndarra
 
 
 def crop_template_from_frame(reference_frame: ndarray, template: ndarray,
-                             template_width: int, template_height: int,
-                             demo: bool = False) -> ndarray:
+                             template_width: int, template_height: int) -> Tuple[ndarray, ndarray]:
+    ref_copy = reference_frame.copy()
     result = cv2.matchTemplate(reference_frame, template, _PROCESSING_METHODS[0])
     min_val, max_val, min_location, max_location = cv2.minMaxLoc(result)
     if _PROCESSING_METHODS in [cv2.TM_SQDIFF, cv2.TM_SQDIFF_NORMED]:
@@ -349,10 +350,12 @@ def crop_template_from_frame(reference_frame: ndarray, template: ndarray,
         img_location = max_location
     bottom_right = (img_location[0] + template_width, img_location[1] + template_height)
     cv2.rectangle(reference_frame, img_location, bottom_right, 255, 5)
+    inverse_cropped_img = cv2.rectangle(ref_copy, img_location, bottom_right, (255, 255, 255), -1)
+
     x1, y1 = img_location
     x2, y2 = bottom_right
     cropped_img = reference_frame[y1:y2, x1:x2]
-    return cropped_img
+    return cropped_img, inverse_cropped_img
 
 
 def draw_boxes_around_text_in_frame(frame: ndarray, text_to_find: List[str]) -> ndarray:
@@ -364,7 +367,6 @@ def draw_boxes_around_text_in_frame(frame: ndarray, text_to_find: List[str]) -> 
                                                output_type=pytesseract.Output.DATAFRAME)
     frame_to_draw_on = frame.copy()
     for line_num, words_per_line in text_dataframe.groupby("line_num"):
-        # filter out words with a low confidence
         words_per_line = words_per_line[words_per_line["conf"] >= 5]
         if not len(words_per_line):
             continue
@@ -385,25 +387,31 @@ def draw_boxes_around_text_in_frame(frame: ndarray, text_to_find: List[str]) -> 
 
 
 def get_center_freq_and_ref_level(
-        frame: ndarray, center_freq_tag: str, reference_level_tag: str, span_tag: str) -> tuple[
-                                                                                              bool, float, float, float] | \
-                                                                                          tuple[bool, float, float]:
+        frame: ndarray, center_freq_tag: str, reference_level_tag: str, span_tag: str) \
+        -> tuple[
+               bool, float, float, float] | \
+           tuple[bool, float, float]:
+    frame_copy = frame.copy()
+
     # Normalize all of the tags
     center_freq_tag_lower = center_freq_tag.lower()
     reference_level_tag_lower = reference_level_tag.lower()
     span_freq_tag_lower = span_tag.lower()
 
-    # Process text
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    threshold_img = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
-    get_all_text: str = pytesseract.image_to_string(threshold_img, lang='eng', config='--psm 6')
-    # Parse string of all text found
+    # Preprocess data for text detection
+    gray_image = cv2.cvtColor(frame_copy, cv2.COLOR_BGR2GRAY)
+    blurred_image = cv2.GaussianBlur(gray_image, (5, 5), 1)
+    _, thresholded_image = cv2.threshold(blurred_image, 97, 255, cv2.THRESH_BINARY_INV)
+
+    # Detect all text discovered in frame
+    get_all_text: str = pytesseract.image_to_string(thresholded_image, lang='eng', config='--psm 6')
     result: str = ''
     for char in get_all_text:
         if char.isalpha():
             result += char.lower()
         else:
             result += char
+    # print(f"result text = {result}")
     center_freq_position = result.find(center_freq_tag_lower)
     rf_level_position = result.find(reference_level_tag_lower)
     span_level_position = result.find(span_freq_tag_lower)
@@ -414,6 +422,14 @@ def get_center_freq_and_ref_level(
         cf_unit = 'ghz'
         cf_str = parsed_signal_from_str(
             string=result, text_position=center_freq_position, tag=center_freq_tag_lower, unit=cf_unit)
+        if cf_str is None: # TODO: Add similar IDs that are common misinterpretations
+            cf_unit = 'gh2'
+            cf_str = parsed_signal_from_str(
+                string=result, text_position=center_freq_position, tag=center_freq_tag_lower, unit=cf_unit)
+        if cf_str is None:
+            cf_unit = 'ghe'
+            cf_str = parsed_signal_from_str(
+                string=result, text_position=center_freq_position, tag=center_freq_tag_lower, unit=cf_unit)
         if cf_str is None:
             cf_unit = 'mhz'
             cf_str = parsed_signal_from_str(
@@ -438,11 +454,15 @@ def get_center_freq_and_ref_level(
         parsed_ref_str = parsed_signal_from_str(
             string=result, text_position=rf_level_position, tag=reference_level_tag_lower, unit='dbm')
 
-        if parsed_ref_str is not None and span_str is not None:
+        if parsed_ref_str is not None and span_str is not None and cf_str is not None:
             try:
-                conditioned_rf_str = parsed_ref_str.replace('o', '0')
-                conditioned_span_str = span_str.replace('o', '0')
-                conditioned_cf_str = cf_str.replace('o', '0')
+                #conditioned_rf_str = parsed_ref_str.replace('o', '0')
+                conditioned_cf_str = condition_cf_str(cf_str=cf_str)
+                conditioned_span_str = condition_span_string(span_str=span_str)
+                conditioned_rf_str = condition_rf_string(rf_str=parsed_ref_str)
+                # print(f"conditioned_rf_str = {conditioned_rf_str}\n"
+                #       f"conditioned_span_str = {conditioned_span_str}\n"
+                #       f"conditioned_cf_str = {conditioned_cf_str}")
                 multiplier_span = find_freq_multiplier_from_unit_str(string=span_unit)
                 multiplier_cf = find_freq_multiplier_from_unit_str(string=cf_unit)
                 ref_lvl = float(conditioned_rf_str)
@@ -462,10 +482,36 @@ def get_center_freq_and_ref_level(
     return found_values, 0.0, 0.0, 0.0
 
 
+def condition_cf_str(cf_str: str) -> str:
+    conditioned_cf_str = cf_str.replace(',', '.')
+    conditioned_cf_str = conditioned_cf_str.replace('o', '0')
+    conditioned_cf_str = conditioned_cf_str.replace('q', '0')
+    conditioned_cf_str = conditioned_cf_str.replace('@', '0')
+    letters = re.compile(r'[a-zA-Z]')  # Match any letter (case-insensitive)
+    result_string = re.sub(letters, '', conditioned_cf_str)
+    result_string = result_string + '0'
+    result_string = result_string.replace(' ', '')
+    return result_string
+
+def condition_rf_string(rf_str: str) -> str:
+    condition_rf_string = rf_str.replace('_', '')
+    condition_rf_string = condition_rf_string.replace('o', '0')
+    condition_rf_string = condition_rf_string.replace('l', '')
+    return condition_rf_string
+
+def condition_span_string(span_str: str) -> str:
+    condition_span_string = span_str.replace(',', '.')
+    condition_span_string = condition_span_string.replace('q', '0')
+    letters = re.compile(r'[a-zA-Z]')  # Match any letter (case-insensitive)
+    result_string = re.sub(letters, '', condition_span_string)
+    result_string = result_string + '0'
+    result_string = result_string.replace(' ', '')
+    return result_string
+
 def find_freq_multiplier_from_unit_str(string: str) -> float:
     formatted_string = string.lower()
     multiplier: float = 1.0
-    if formatted_string == 'ghz':
+    if formatted_string == 'ghz' or formatted_string == 'gh2' or formatted_string == 'ghe':
         multiplier = 1e9
     elif formatted_string == 'mhz':
         multiplier = 1e6
