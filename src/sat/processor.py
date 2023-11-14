@@ -6,6 +6,9 @@ This module is responsible for managing decoding of video for the application.
 #: Imports
 import logging
 import os
+import queue
+import threading
+
 import plotly.graph_objects as go
 import cv2
 import numpy
@@ -37,15 +40,17 @@ class Processor(object):
                  bgra_min_filter: List[float],
                  bgra_max_filter: List[float],
                  db_per_division: int,
+                 text_img_threshold: int,
+                 stop_event: threading.Event = None,
+                 data_q: queue.Queue = None,
                  center_freq_id: str = "CENTER",
                  ref_lvl_id: str = "RL",
                  span_lvl_id: str = "SPAN",
                  scan_for_relative_threshold: bool = False,
-                 dbm_threshold: float = None,
                  record_relative_signal: bool = True,
                  record_scaled_signal: bool = True,
-                 record_max_signal_scaled: bool = False,
-                 default_threshold_graph_percentage: float = 0.8):
+                 record_max_signal_scaled: bool = False):
+        self.text_img_threshold = text_img_threshold
         self.db_per_division = db_per_division
         self.video_fp = video_fp
         self.template_fp = template_fp
@@ -54,7 +59,6 @@ class Processor(object):
         self.bgra_min_filter = bgra_min_filter
         self.bgra_max_filter = bgra_max_filter
         self.scan_for_threshold = scan_for_relative_threshold
-        self.dbm_threshold = dbm_threshold
         self.cf_tag = center_freq_id
         self.ref_lvl_tag = ref_lvl_id
         self.span_tag = span_lvl_id
@@ -64,9 +68,15 @@ class Processor(object):
         self.record_max_signal_scaled = record_max_signal_scaled
         self.fps: float = None
         self.read_first_scaled_factors: bool = False
+        self.data_q: queue.Queue = data_q
+        self.stop_event: threading.Event = stop_event
         os.makedirs(self.log_dir, exist_ok=True)
 
-    def run(self, result: List[str]) -> None:
+    def __del__(self):
+        exit()
+
+    def run(self) -> None:
+        logs: List[str] = []
         logging.info(f"Attempting to load video from filepath {self.video_fp}...")
         template = load_template_im(template_img_fp=self.template_fp)
         capture = cv2.VideoCapture(self.video_fp)
@@ -118,6 +128,7 @@ class Processor(object):
 
         frame_counter: int = 0
         frame_thresholds: List[Tuple[bool, int]] = []
+        q_data = type.ProcessorQueueData(current_frame=frame_counter, logs=logs, finished=False)
         while reading:
             reading, frame = capture.read()
             if reading:
@@ -135,6 +146,12 @@ class Processor(object):
                                                        record_relative_coordinate=self.record_relative_signal
                                                        ))
                 frame_thresholds.append((frame_threshold_found, frame_counter))
+                if self.stop_event.is_set():
+                    logging.critical(f"Ending Processor...")
+                    self.__del__()
+                if self.data_q is not None:
+                    q_data.current_frame = frame_counter
+                    self.data_q.put(q_data)
         if self.scan_for_threshold and self.record_relative_signal:
             self.graph_dbm_thresholds(thresholds=frame_thresholds, total_frames=frame_counter, frames_per_sec=self.fps,
                                       video_fp=self.video_fp, data_logfile=relative_log_filename)
@@ -142,22 +159,26 @@ class Processor(object):
         if filestream_relative_signal is not None:
             try:
                 filestream_relative_signal.close()
-                result.append(relative_log_filename)
+                logs.append(relative_log_filename)
             except Exception:
                 pass
         if filestream_max_signal is not None:
             try:
                 filestream_max_signal.close()
-                result.append(max_signal_log_filename)
+                logs.append(max_signal_log_filename)
             except Exception:
                 pass
         if filestream_scaled_signal is not None:
             try:
                 filestream_scaled_signal.close()
-                result.append(scaled_signal_log_filename)
+                logs.append(scaled_signal_log_filename)
             except Exception:
                 pass
         cv2.destroyAllWindows()
+        logging.info(f"All logs recorded for this test cycle: {logs}")
+        if self.data_q is not None:
+            q_data = type.ProcessorQueueData(current_frame=frame_counter, logs=logs, finished=True)
+            self.data_q.put(q_data)
 
     def graph_dbm_thresholds(self, thresholds: List[Tuple[bool, int]], total_frames: int, frames_per_sec: float,
                              video_fp: str, data_logfile: str):
@@ -215,9 +236,10 @@ class Processor(object):
 
         if record_max_coordinate or record_scaled_coordinate:
             successful, center_freq, reference_level, span_freq = (
-                get_center_freq_and_ref_level(
+                read_signal_levels_from_frame(
                     frame=inverse_cropped_img, center_freq_tag=self.cf_tag,
-                    reference_level_tag=self.ref_lvl_tag, span_tag=self.span_tag))
+                    reference_level_tag=self.ref_lvl_tag, span_tag=self.span_tag,
+                    text_img_threshold=self.text_img_threshold))
         return under_threshold
 
     def scan_for_dbm_threshold(self,
@@ -359,35 +381,47 @@ def crop_template_from_frame(reference_frame: ndarray, template: ndarray,
 
 
 def draw_boxes_around_text_in_frame(frame: ndarray, text_to_find: List[str]) -> ndarray:
+    try:
+        frame_copy = frame.copy()
+        # gray = cv2.cvtColor(frame_copy, cv2.COLOR_BGR2GRAY)
+        # threshold_img = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+        # boxes_threshold_img = threshold_img.copy()
+        text_dataframe = pytesseract.image_to_data(frame_copy, lang="eng", config="--psm 6",
+                                                   output_type=pytesseract.Output.DATAFRAME)
+        frame_to_draw_on = frame.copy()
+        for line_num, words_per_line in text_dataframe.groupby("line_num"):
+            words_per_line = words_per_line[words_per_line["conf"] >= 5]
+            if not len(words_per_line):
+                continue
+
+            words = words_per_line["text"].values
+            line = " ".join(words)
+
+            for each_text in text_to_find:
+                if each_text.lower() in line.lower():
+                    word_boxes = []
+                    for left, top, width, height in words_per_line[["left", "top", "width", "height"]].values:
+                        word_boxes.append((left, top))
+                        word_boxes.append((left + width, top + height))
+                    x, y, w, h = cv2.boundingRect(numpy.array(word_boxes))
+                    frame_to_draw_on = cv2.rectangle(
+                        frame_to_draw_on, (x, y), (x + w, y + h), color=(255, 0, 255), thickness=3)
+        return frame_to_draw_on
+    except Exception as e:
+        logging.info(f"Issue drawing box around text within frame: {e}")
+        return None
+
+
+def get_preprocessed_image_for_text_detection(frame: ndarray, threshold: int) -> ndarray:
     frame_copy = frame.copy()
-    gray = cv2.cvtColor(frame_copy, cv2.COLOR_BGR2GRAY)
-    threshold_img = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
-    boxes_threshold_img = threshold_img.copy()
-    text_dataframe = pytesseract.image_to_data(boxes_threshold_img, lang="eng", config="--psm 6",
-                                               output_type=pytesseract.Output.DATAFRAME)
-    frame_to_draw_on = frame.copy()
-    for line_num, words_per_line in text_dataframe.groupby("line_num"):
-        words_per_line = words_per_line[words_per_line["conf"] >= 5]
-        if not len(words_per_line):
-            continue
-
-        words = words_per_line["text"].values
-        line = " ".join(words)
-
-        for each_text in text_to_find:
-            if each_text.lower() in line.lower():
-                word_boxes = []
-                for left, top, width, height in words_per_line[["left", "top", "width", "height"]].values:
-                    word_boxes.append((left, top))
-                    word_boxes.append((left + width, top + height))
-                x, y, w, h = cv2.boundingRect(numpy.array(word_boxes))
-                frame_to_draw_on = cv2.rectangle(
-                    frame_to_draw_on, (x, y), (x + w, y + h), color=(255, 0, 255), thickness=3)
-    return frame_to_draw_on
+    gray_image = cv2.cvtColor(frame_copy, cv2.COLOR_BGR2GRAY)
+    blurred_image = cv2.GaussianBlur(gray_image, (5, 5), 1)
+    _, thresholded_image = cv2.threshold(blurred_image, float(threshold), 255, cv2.THRESH_BINARY_INV)
+    return thresholded_image
 
 
-def get_center_freq_and_ref_level(
-        frame: ndarray, center_freq_tag: str, reference_level_tag: str, span_tag: str) \
+def read_signal_levels_from_frame(
+        frame: ndarray, center_freq_tag: str, reference_level_tag: str, span_tag: str, text_img_threshold: int) \
         -> tuple[
                bool, float, float, float] | \
            tuple[bool, float, float]:
@@ -399,12 +433,10 @@ def get_center_freq_and_ref_level(
     span_freq_tag_lower = span_tag.lower()
 
     # Preprocess data for text detection
-    gray_image = cv2.cvtColor(frame_copy, cv2.COLOR_BGR2GRAY)
-    blurred_image = cv2.GaussianBlur(gray_image, (5, 5), 1)
-    _, thresholded_image = cv2.threshold(blurred_image, 97, 255, cv2.THRESH_BINARY_INV)
+    preprocessed_img = get_preprocessed_image_for_text_detection(frame=frame_copy, threshold=text_img_threshold)
 
     # Detect all text discovered in frame
-    get_all_text: str = pytesseract.image_to_string(thresholded_image, lang='eng', config='--psm 6')
+    get_all_text: str = pytesseract.image_to_string(preprocessed_img, lang='eng', config='--psm 6')
     result: str = ''
     for char in get_all_text:
         if char.isalpha():
@@ -422,7 +454,7 @@ def get_center_freq_and_ref_level(
         cf_unit = 'ghz'
         cf_str = parsed_signal_from_str(
             string=result, text_position=center_freq_position, tag=center_freq_tag_lower, unit=cf_unit)
-        if cf_str is None: # TODO: Add similar IDs that are common misinterpretations
+        if cf_str is None:  # TODO: Add similar IDs that are common misinterpretations
             cf_unit = 'gh2'
             cf_str = parsed_signal_from_str(
                 string=result, text_position=center_freq_position, tag=center_freq_tag_lower, unit=cf_unit)
@@ -456,7 +488,7 @@ def get_center_freq_and_ref_level(
 
         if parsed_ref_str is not None and span_str is not None and cf_str is not None:
             try:
-                #conditioned_rf_str = parsed_ref_str.replace('o', '0')
+                # conditioned_rf_str = parsed_ref_str.replace('o', '0')
                 conditioned_cf_str = condition_cf_str(cf_str=cf_str)
                 conditioned_span_str = condition_span_string(span_str=span_str)
                 conditioned_rf_str = condition_rf_string(rf_str=parsed_ref_str)
@@ -472,8 +504,8 @@ def get_center_freq_and_ref_level(
                     found_values = False
                 else:
                     found_values = True
-                print(f"ref lvl = {ref_lvl}\ncenter freq = {center_freq}\nspan freq = {span_freq}\n"
-                      f"ref lvl unit = dbm\ncenter freq unit = {cf_unit}\nspan freq unit = {span_unit}")
+                # print(f"ref lvl = {ref_lvl}\ncenter freq = {center_freq}\nspan freq = {span_freq}\n"
+                #       f"ref lvl unit = dbm\ncenter freq unit = {cf_unit}\nspan freq unit = {span_unit}")
                 return found_values, ref_lvl, center_freq, span_freq
             except Exception as e:
                 logging.debug(f"Could not convert center freq and ref lvl to float: {e}")
@@ -493,11 +525,13 @@ def condition_cf_str(cf_str: str) -> str:
     result_string = result_string.replace(' ', '')
     return result_string
 
+
 def condition_rf_string(rf_str: str) -> str:
     condition_rf_string = rf_str.replace('_', '')
     condition_rf_string = condition_rf_string.replace('o', '0')
     condition_rf_string = condition_rf_string.replace('l', '')
     return condition_rf_string
+
 
 def condition_span_string(span_str: str) -> str:
     condition_span_string = span_str.replace(',', '.')
@@ -507,6 +541,7 @@ def condition_span_string(span_str: str) -> str:
     result_string = result_string + '0'
     result_string = result_string.replace(' ', '')
     return result_string
+
 
 def find_freq_multiplier_from_unit_str(string: str) -> float:
     formatted_string = string.lower()
@@ -575,7 +610,8 @@ if __name__ == "__main__":
                           db_per_division=10,
                           center_freq_id='CENTER',
                           span_lvl_id='SPAN',
-                          ref_lvl_id='RL')
+                          ref_lvl_id='RL',
+                          text_img_threshold=97)
     filepath_to_save_csv = []
-    processor.run(result=filepath_to_save_csv)
+    processor.run(logs=filepath_to_save_csv)
     print(f"filepath after run: {filepath_to_save_csv[0]}")

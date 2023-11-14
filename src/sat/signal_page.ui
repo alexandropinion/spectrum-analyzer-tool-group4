@@ -369,7 +369,7 @@
      <rect>
       <x>550</x>
       <y>70</y>
-      <width>701</width>
+      <width>291</width>
       <height>22</height>
      </rect>
     </property>
@@ -701,6 +701,62 @@
     </property>
     <property name="alignment">
      <set>Qt::AlignCenter</set>
+    </property>
+   </widget>
+   <widget class="QSlider" name="selectThresholdSlider">
+    <property name="geometry">
+     <rect>
+      <x>900</x>
+      <y>70</y>
+      <width>241</width>
+      <height>22</height>
+     </rect>
+    </property>
+    <property name="toolTip">
+     <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;In order to accurate process the signal values from each frame of video, a preprocessing technique is used before scanning for text across the entire image. A threshold setting between 0 and 255 can be adjusted to modify how well text is shown.  View the image in the frame to determine if text is visible or not after adjusting this value.  Generally, a value around 100 was discovered to be most ideal, but this value can change depending on the spectrum analyzer video.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+    </property>
+    <property name="orientation">
+     <enum>Qt::Horizontal</enum>
+    </property>
+    <property name="tickPosition">
+     <enum>QSlider::TicksBothSides</enum>
+    </property>
+   </widget>
+   <widget class="QLabel" name="selectTextScanText_2">
+    <property name="geometry">
+     <rect>
+      <x>900</x>
+      <y>30</y>
+      <width>261</width>
+      <height>31</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>12</pointsize>
+      <weight>50</weight>
+      <bold>false</bold>
+     </font>
+    </property>
+    <property name="text">
+     <string>Select Image Threshold:</string>
+    </property>
+   </widget>
+   <widget class="QLCDNumber" name="imgTextThreshold">
+    <property name="geometry">
+     <rect>
+      <x>1160</x>
+      <y>40</y>
+      <width>81</width>
+      <height>61</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>12</pointsize>
+      <weight>75</weight>
+      <bold>true</bold>
+     </font>
     </property>
    </widget>
   </widget>

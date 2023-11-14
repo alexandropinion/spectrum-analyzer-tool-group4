@@ -1,8 +1,10 @@
 import configparser
 import logging
 import os
+import queue
+import threading
 from types import NoneType
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 
 import numpy
 from PyQt5.QtCore import Qt, QSize, QTimer, pyqtSignal
@@ -16,9 +18,10 @@ from PyQt5.QtWidgets import QMainWindow, QApplication, QPushButton, QLabel, QFil
     QTextEdit, QVBoxLayout, QColorDialog, QLCDNumber, QSlider, QToolButton, QCheckBox
 from PyQt5 import uic
 from processor import get_video_config, cv2, get_frame_count, get_specific_frame, get_reference_frame, \
-    crop_template_from_frame, parse_trace_from_frame, load_template_im, show_frame, get_center_freq_and_ref_level, \
-    draw_boxes_around_text_in_frame
+    crop_template_from_frame, parse_trace_from_frame, load_template_im, show_frame, read_signal_levels_from_frame, \
+    draw_boxes_around_text_in_frame, get_preprocessed_image_for_text_detection, Processor
 from distribution import __app_name__, __app_version__
+from src.sat.type import ProcessorParams
 
 #: Globals
 CONFIG_FILENAME: str = 'config.ini'
@@ -56,7 +59,7 @@ class MainWindow(QMainWindow):
     def start_processor_preset_btn_callback(self) -> None:
         start: bool = confirm(msg=f"Are you sure you want to start processing?")
         if start:
-            run_processor()
+            print("temp start")
 
     def calibrate_processor_preset_btn_callback(self) -> None:
         self.go_to_calibration_window(filepath=self.current_loaded_video_filepath)
@@ -246,6 +249,7 @@ class CalibrationWindow(QMainWindow):
 
 
 class TemplateWindow(QMainWindow):
+    go_to_signal_window_signal = pyqtSignal(bool)
 
     def __init__(self, widget: QtWidgets.QStackedWidget):
         super(TemplateWindow, self).__init__()
@@ -387,11 +391,11 @@ class TemplateWindow(QMainWindow):
             reference_img, height_template, width_template, size, template_grayscale = (
                 get_reference_frame(frame=frame,
                                     template=self.current_template[0]))
-            cropped_img = crop_template_from_frame(reference_frame=reference_img,
-                                                   template=template_grayscale,
-                                                   template_width=width_template,
-                                                   template_height=height_template,
-                                                   demo=False)
+            cropped_img, inverse_cropped_img = \
+                crop_template_from_frame(reference_frame=reference_img,
+                                         template=template_grayscale,
+                                         template_width=width_template,
+                                         template_height=height_template)
 
             mask = parse_trace_from_frame(bgra_min_limit=self.bgra_min_limit,
                                           bgra_max_limit=self.bgra_max_limit,
@@ -408,6 +412,7 @@ class TemplateWindow(QMainWindow):
             logging.info(f"Error while using slider: {e}")
 
     def next_page_btn_callback(self) -> None:
+        self.go_to_signal_window_signal.emit(True)
         self.widget.setCurrentIndex(3)
 
     def load_template_btn_callback(self) -> None:
@@ -456,9 +461,11 @@ class SignalWindow(QMainWindow):
         uic.loadUi("signal_page.ui", self)
         self.current_video_filepath: str = ""
         self.current_template_filepath: str = ""
+        self.current_text_img_threshold: int = 0
+        self.total_frames_in_video: int = 0
         self.signal_frame_label = self.findChild(QLabel, "signalImage")
         self.start_processor_btn = self.findChild(QPushButton, 'startProcessingBtn')
-        self.start_processor_btn.clicked.connect(self.start_processor_btn_callback)
+        self.start_processor_btn.clicked.connect(self.start_processing_btn_callback)
         self.go_back_btn = self.findChild(QPushButton, 'goBackBtn')
         self.go_back_btn.clicked.connect(self.go_back_btn_callback)
         self.scan_text_slider: QSlider = self.findChild(QSlider, "selectTextScanSlider")
@@ -488,6 +495,9 @@ class SignalWindow(QMainWindow):
         self.scan_threshold_slider.sliderReleased.connect(self.scan_threshold_slider_callback)
         self.division_per_db_slider: QSlider = self.findChild(QSlider, "divisionPerDbSlider")
         self.division_per_db_slider.sliderReleased.connect(self.division_per_db_slider_callback)
+        self.select_text_img_threshold_slider: QSlider = self.findChild(QSlider, "selectThresholdSlider")
+        self.select_text_img_threshold_slider.sliderReleased.connect(self.select_text_img_threshold_slider_callback)
+        self.text_img_threshold_lcd: QLCDNumber = self.findChild(QLCDNumber, "imgTextThreshold")
 
         # LCDs for signal characteristics
         self.center_freq_lcd: QLabel = self.findChild(QLabel, "centerFreq")
@@ -499,6 +509,20 @@ class SignalWindow(QMainWindow):
 
         self.init_sliders()
         self.initialize_signal_window()
+
+    def select_text_img_threshold_slider_callback(self) -> None:
+        try:
+            conf = configparser.ConfigParser()
+            conf.read_file(open(CONFIG_FILENAME, 'r'))
+            val = int(self.select_text_img_threshold_slider.value())
+            self.text_img_threshold_lcd.display(val)
+            conf.set("cal.signal", "text_image_threshold", str(val))
+            with open(CONFIG_FILENAME, "w") as conf_file:
+                conf.write(conf_file)
+            self.current_text_img_threshold = val
+            self.scan_text_slider_callback()
+        except Exception as e:
+            logging.critical(f"Issue while selecting text image threshold slider: {e}")
 
     def division_per_db_slider_callback(self) -> None:
         try:
@@ -543,6 +567,8 @@ class SignalWindow(QMainWindow):
         self.division_slider.setMaximum(20)
         self.division_per_db_slider.setMaximum(50)
         self.division_per_db_slider.setMinimum(1)
+        self.select_text_img_threshold_slider.setMinimum(0)
+        self.select_text_img_threshold_slider.setMaximum(255)
         try:
             with open(f"{CONFIG_FILENAME}") as config_file:
                 config = configparser.ConfigParser()
@@ -554,10 +580,20 @@ class SignalWindow(QMainWindow):
                 self.scan_threshold_slider.setValue(int(config['cal.signal']['threshold_percent']))
                 self.threshold_lcd.display(int(config['cal.signal']['threshold_percent']))
                 total_frames = int(config['cal.trace']['total_frames'])
+                self.total_frames_in_video = total_frames
                 self.scan_text_slider.setMinimum(0)
                 self.scan_text_slider.setMaximum(total_frames)
         except Exception as e:
             logging.info(f"Error while initializing trace rgb slider: {e}")
+
+    @QtCore.pyqtSlot()
+    def signal_window_is_being_shown(self) -> None:
+        try:
+            self.init_sliders()
+            self.initialize_signal_window()
+            self.select_text_img_threshold_slider_callback()
+        except Exception as e:
+            logging.info(f"Exception while displaying image: {e}")
 
     def scan_threshold_checkbox_callback(self) -> None:
         is_checked = self.scan_threshold_checkbox.isChecked()
@@ -589,7 +625,6 @@ class SignalWindow(QMainWindow):
     def record_freq_dbm_checkbox_callback(self) -> None:
         is_checked = self.record_freq_dbm_checkbox.isChecked()
         try:
-            print(f"record_freq_dbm: {is_checked}")
             conf = configparser.ConfigParser()
             conf.read_file(open(CONFIG_FILENAME, 'r'))
             val: int = 0
@@ -607,7 +642,6 @@ class SignalWindow(QMainWindow):
 
     def record_max_ampl_checkbox_callback(self) -> None:
         is_checked = self.record_max_ampl_checkbox.isChecked()
-        print(f"record_max_dbm: {is_checked}")
         try:
             conf = configparser.ConfigParser()
             conf.read_file(open(CONFIG_FILENAME, 'r'))
@@ -626,7 +660,6 @@ class SignalWindow(QMainWindow):
 
     def record_relative_ampl_checkbox_callback(self) -> None:
         is_checked = self.record_relative_ampl_checkbox.isChecked()
-        print(f"record_relative_dbm: {is_checked}")
         try:
             conf = configparser.ConfigParser()
             conf.read_file(open(CONFIG_FILENAME, 'r'))
@@ -650,19 +683,17 @@ class SignalWindow(QMainWindow):
             ref_level_id = self.ref_level_id.toPlainText()
             frame = get_specific_frame(filepath=self.current_video_filepath,
                                        frame_num=int(self.scan_text_slider.value()))
-            success, ref_lvl, center_freq, span_freq = get_center_freq_and_ref_level(
+            success, ref_lvl, center_freq, span_freq = read_signal_levels_from_frame(
                 frame=frame, center_freq_tag=center_freq_id,
-                reference_level_tag=ref_level_id, span_tag=span_freq_id)
+                reference_level_tag=ref_level_id, span_tag=span_freq_id,
+                text_img_threshold=self.current_text_img_threshold)
 
-            frame_with_boxes_around_tags = (
-                draw_boxes_around_text_in_frame(frame=frame,
-                                                text_to_find=[ref_level_id,
-                                                              span_freq_id,
-                                                              center_freq_id]))
+            frame_to_show = get_preprocessed_image_for_text_detection(
+                frame=frame, threshold=self.current_text_img_threshold)
 
             converted_img = QImage(
-                frame_with_boxes_around_tags, frame_with_boxes_around_tags.shape[1],
-                frame_with_boxes_around_tags.shape[0], QImage.Format.Format_BGR888)
+                frame_to_show, frame_to_show.shape[1],
+                frame_to_show.shape[0], QImage.Format.Format_Grayscale8)
             converted_img = converted_img.scaled(self.signal_frame_label.width(), self.signal_frame_label.height(),
                                                  QtCore.Qt.AspectRatioMode.KeepAspectRatio,
                                                  QtCore.Qt.TransformationMode.SmoothTransformation)
@@ -689,13 +720,12 @@ class SignalWindow(QMainWindow):
     def go_back_btn_callback(self) -> None:
         self.widget.setCurrentIndex(2)
 
-    def start_processor_btn_callback(self) -> None:
-        pass
 
     def initialize_signal_window(self) -> None:
         try:
             conf = configparser.ConfigParser()
             conf.read_file(open(CONFIG_FILENAME, 'r'))
+            text_img_threshold = int(conf['cal.signal']['text_image_threshold'])
             db_per_division = int(conf['cal.signal']['db_per_division'])
             center_freq_text = str(conf['cal.signal']['center_freq_text'])
             reference_level_text = str(conf['cal.signal']['reference_level_text'])
@@ -727,6 +757,9 @@ class SignalWindow(QMainWindow):
             else:
                 self.scan_threshold_checkbox.setChecked(False)
 
+            self.current_text_img_threshold = text_img_threshold  # TODO: update threshold lcd and slider
+            self.text_img_threshold_lcd.display(text_img_threshold)
+            self.select_text_img_threshold_slider.setValue(text_img_threshold)
             self.select_csv_filepath_text.setText(csv_output_directory)
             self.center_freq_id.setText(center_freq_text)
             self.span_freq_id.setText(span_text)
@@ -734,6 +767,7 @@ class SignalWindow(QMainWindow):
             self.division_slider.setValue(total_db_divisions)
             self.division_per_db_slider.setValue(db_per_division)
             # self.division_per_db_lcd.dislay(db_per_division)
+            self.select_csv_filepath.setStyleSheet("background-color : #B2FDFF")
             self.start_processor_btn.setStyleSheet("background-color : #62FFAD")
             self.go_back_btn.setStyleSheet("background-color : #FF9C6D")
             self.current_template_filepath = str(conf['cal.template']['cal_template_filepath'])
@@ -755,8 +789,49 @@ class SignalWindow(QMainWindow):
         if val == QMessageBox.Ok:
             self.start_processing()
 
+    def data_queue_callback(self, data) -> None:
+        print(f"Data has arrived in the queue...{data}")
+
     def start_processing(self) -> None:
-        pass
+        success, processor_params = get_all_processor_params_from_ini(ini_fp=CONFIG_FILENAME)
+        data_q: queue.Queue = ProcessorQueueCallback(callback=self.data_queue_callback)
+        processor_thread = ProcessorThread(params=processor_params, data_queue=data_q)
+        processor_thread.daemon = False
+        processor_thread.start()
+
+
+def get_all_processor_params_from_ini(ini_fp: str) -> Tuple[bool, ProcessorParams] | Tuple[bool, None]:
+    try:
+        conf = configparser.ConfigParser()
+        conf.read_file(open(ini_fp, 'r'))
+        return True, ProcessorParams(video_fp=conf['app']['load_video_filepath'],
+                                     template_fp=conf['cal.template']['cal_template_filepath'],
+                                     log_directory=conf['cal.signal']['csv_output_directory'],
+                                     dbm_magnitude_threshold=float(conf['cal.signal']['threshold_percent']),
+                                     bgra_min_filter=[int(conf['cal.template']['blue_min']),
+                                                      int(conf['cal.template']['green_min']),
+                                                      int(conf['cal.template']['red_min']),
+                                                      255],
+                                     bgra_max_filter=[int(conf['cal.template']['blue_max']),
+                                                      int(conf['cal.template']['green_max']),
+                                                      int(conf['cal.template']['red_max']),
+                                                      255],
+                                     db_per_division=int(conf['cal.signal']['db_per_division']),
+                                     text_img_threshold=int(conf['cal.signal']['text_image_threshold']),
+                                     center_freq_id=conf['cal.signal']['center_freq_text'],
+                                     ref_lvl_id=conf['cal.signal']['reference_level_text'],
+                                     span_lvl_id=conf['cal.signal']['span_text'],
+                                     scan_for_relative_threshold=bool(
+                                         int(conf['cal.signal']['scan_relative_amplitude_threshold'])),
+                                     record_relative_signal=bool(
+                                         int(conf['cal.signal']['record_entire_signal_with_no_scaling_factors'])),
+                                     record_scaled_signal=bool(
+                                         int(conf['cal.signal']['record_entire_signal_with_scaling_factors'])),
+                                     record_max_signal_scaled=bool(
+                                         int(conf['cal.signal']['record_only_max_signal_with_scaling_factors'])))
+    except Exception as e:
+        logging.critical(f"Issue while grabbing all processor params from {ini_fp}: {e}")
+        return False, None
 
 
 def confirm(msg: str) -> bool:
@@ -775,15 +850,52 @@ def confirm(msg: str) -> bool:
         return False
 
 
-def run_processor() -> None:
-    pass
+#: Classes
+class ProcessorQueueCallback(queue.Queue):
+    def __init__(self, callback=None, maxsize=0):
+        super().__init__(maxsize=maxsize)
+        self.callback = callback
+
+    def put(self, item, block=True, timeout=None):
+        super().put(item, block, timeout)
+        if self.callback:
+            self.callback(item)
+
+
+class ProcessorThread(threading.Thread):
+    def __init__(self, params: ProcessorParams, data_queue: queue.Queue):
+        super(ProcessorThread, self).__init__()
+        self.stop_thread = threading.Event()
+        self.data_queue = data_queue
+        self.params = params
+
+    def run(self) -> None:
+        processor = Processor(video_fp=self.params.video_fp,
+                              template_fp=self.params.template_fp,
+                              bgra_max_filter=self.params.bgra_max_filter,
+                              bgra_min_filter=self.params.bgra_min_filter,
+                              db_per_division=self.params.db_per_division,
+                              dbm_magnitude_threshold=self.params.dbm_magnitude_threshold,
+                              log_directory=self.params.log_directory,
+                              record_max_signal_scaled=self.params.record_max_signal_scaled,
+                              record_scaled_signal=self.params.record_scaled_signal,
+                              record_relative_signal=self.params.record_relative_signal,
+                              ref_lvl_id=self.params.ref_lvl_id,
+                              scan_for_relative_threshold=self.params.scan_for_relative_threshold,
+                              span_lvl_id=self.params.span_lvl_id,
+                              center_freq_id=self.params.center_freq_id,
+                              text_img_threshold=self.params.text_img_threshold,
+                              stop_event=self.stop_thread,
+                              data_q=self.data_queue)
+
+        processor.run()
+
+    def stop(self) -> None:
+        self.stop_thread.set()
 
 
 def start() -> None:
     # initialization of the app
-    logging.basicConfig(level=logging.DEBUG,
-                        format="%(asctime)s;%(levelname)s;%(message)s",
-                        datefmt="%Y-%m-%d %H:%M:%S")
     app = QApplication(sys.argv)
     app.setApplicationName(f"{__app_name__} {__app_version__}")
     widget = QtWidgets.QStackedWidget()
@@ -796,12 +908,12 @@ def start() -> None:
     widget.addWidget(template_window)
     widget.addWidget(signal_window)
     widget.show()
+    template_window.go_to_signal_window_signal.connect(signal_window.signal_window_is_being_shown)
     load_window.move_to_cal_window_signal.connect(cal_window.moved_to_cal_window)
     cal_window.go_to_template_window_signal.connect(template_window.load_processed_images_to_window)
     load_window.current_video_filepath_signal.connect(cal_window.get_current_video_filepath)
     load_window.current_video_filepath_signal.connect(template_window.get_current_video_filepath)
     load_window.current_video_filepath_signal.connect(signal_window.get_current_video_filepath)
-    # load_window.current_csv_filepath.connect(cal_window.get_current_csv_filepath)
     app.exec_()
 
 
