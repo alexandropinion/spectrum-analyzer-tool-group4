@@ -15,13 +15,13 @@ import load_page
 import sys
 from PyQt5 import QtWidgets, QtGui, QtCore
 from PyQt5.QtWidgets import QMainWindow, QApplication, QPushButton, QLabel, QFileDialog, QDialog, QWidget, QMessageBox, \
-    QTextEdit, QVBoxLayout, QColorDialog, QLCDNumber, QSlider, QToolButton, QCheckBox
+    QTextEdit, QVBoxLayout, QColorDialog, QLCDNumber, QSlider, QToolButton, QCheckBox, QProgressBar, QPlainTextEdit
 from PyQt5 import uic
 from processor import get_video_config, cv2, get_frame_count, get_specific_frame, get_reference_frame, \
     crop_template_from_frame, parse_trace_from_frame, load_template_im, show_frame, read_signal_levels_from_frame, \
     draw_boxes_around_text_in_frame, get_preprocessed_image_for_text_detection, Processor
 from distribution import __app_name__, __app_version__
-from src.sat.type import ProcessorParams
+from src.sat.type import ProcessorParams, get_datetime_heading
 
 #: Globals
 CONFIG_FILENAME: str = 'config.ini'
@@ -52,8 +52,8 @@ class MainWindow(QMainWindow):
         self.calibrate_processor_preset_btn.clicked.connect(self.calibrate_processor_preset_btn_callback)
         self.calibrate_processor_preset_btn.setDisabled(True)
         self.start_processor_preset_btn.setDisabled(True)
-        self.csv_textbox = self.findChild(QTextEdit, "csvFilepathLabel")
-        self.ini_file_exists: bool = self.load_ini_file_to_app()
+        # self.csv_textbox = self.findChild(QTextEdit, "csvFilepathLabel")
+        # self.ini_file_exists: bool = self.load_ini_file_to_app()
         self.setup_window_backgroud()
 
     def start_processor_preset_btn_callback(self) -> None:
@@ -107,15 +107,15 @@ class MainWindow(QMainWindow):
         self.move_to_cal_window_signal.emit(True)
         self.widget.setCurrentIndex(1)
 
-    def load_ini_file_to_app(self) -> bool:
-        try:
-            with open(f"{CONFIG_FILENAME}") as config_file:
-                config = configparser.ConfigParser()
-                config.read_file(config_file)
-                self.csv_textbox.setText(config['app']['csv_output_directory'])
-        except Exception as e:
-            logging.info(e)
-            return False
+    # def load_ini_file_to_app(self) -> bool:
+    #     try:
+    #         with open(f"{CONFIG_FILENAME}") as config_file:
+    #             config = configparser.ConfigParser()
+    #             config.read_file(config_file)
+    #             self.csv_textbox.setText(config['app']['csv_output_directory'])
+    #     except Exception as e:
+    #         logging.info(e)
+    #         return False
 
 
 class CalibrationWindow(QMainWindow):
@@ -452,6 +452,7 @@ class TemplateWindow(QMainWindow):
 
 
 class SignalWindow(QMainWindow):
+    start_processor_signal: pyqtSignal = pyqtSignal(bool)
 
     def __init__(self, widget: QtWidgets.QStackedWidget):
         super(SignalWindow, self).__init__()
@@ -610,10 +611,10 @@ class SignalWindow(QMainWindow):
             logging.critical(f"Issue scanning threshold checkbox: {e}")
 
     def select_csv_filepath_callback(self) -> None:
-        csv_directory = str(QFileDialog.getExistingDirectory(self, "Select Directory to save CSV data to:"))
-        logging.info(f"Location to save CSV file has been selected: {csv_directory}")
-        self.select_csv_filepath_text.setText(csv_directory)
         try:
+            csv_directory = str(QFileDialog.getExistingDirectory(self, "Select Directory to save CSV data to:"))
+            logging.info(f"Location to save CSV file has been selected: {csv_directory}")
+            self.select_csv_filepath_text.setPlainText(csv_directory)
             conf = configparser.ConfigParser()
             conf.read_file(open(CONFIG_FILENAME, 'r'))
             conf.set("cal.signal", "csv_output_directory", csv_directory)
@@ -720,7 +721,6 @@ class SignalWindow(QMainWindow):
     def go_back_btn_callback(self) -> None:
         self.widget.setCurrentIndex(2)
 
-
     def initialize_signal_window(self) -> None:
         try:
             conf = configparser.ConfigParser()
@@ -787,17 +787,81 @@ class SignalWindow(QMainWindow):
         msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
         val = msg.exec_()
         if val == QMessageBox.Ok:
-            self.start_processing()
+            self.start_processor_signal.emit(True)
+            self.widget.setCurrentIndex(4)
+
+
+class ProgressWindow(QMainWindow):
+
+    def __init__(self, widget: QtWidgets.QStackedWidget):
+        super(ProgressWindow, self).__init__()
+        self.window_initialized: bool = False
+        self.widget = widget
+        uic.loadUi("progress_page.ui", self)
+        self.progress_bar = self.findChild(QProgressBar, "progressBar")
+        self.cancel_btn = self.findChild(QPushButton, "cancelBtn")
+        self.cancel_btn.setStyleSheet("background-color : #FF4848")
+        self.plain_text_box = self.findChild(QPlainTextEdit, "progressText")
+        self.cancel_btn.clicked.connect(self.cancel_btn_callback)
+        self.data_q: queue.Queue = None
+        self.total_frames: int = None
+        self.current_params: ProcessorParams = None
+        self.current_processor_thread: ProcessorThread = None
+
+    @QtCore.pyqtSlot()
+    def start_processing(self) -> None:
+        try:
+            success, self.current_params = get_all_processor_params_from_ini(ini_fp=CONFIG_FILENAME)
+            self.update_total_frames()
+            self.plain_text_box.appendPlainText(f"{get_datetime_heading()}: "
+                                        f"Processing the following video file: {self.current_params.video_fp}\n"
+                                        f"{get_datetime_heading()}: Logs are being stored in: {self.current_params.log_directory}")
+            if success:
+                self.data_q: queue.Queue = ProcessorQueueCallback(callback=self.data_queue_callback)
+                self.current_processor_thread = ProcessorThread(params=self.current_params, data_queue=self.data_q)
+                self.current_processor_thread.daemon = False
+                self.current_processor_thread.start()
+            else:
+                prompt(
+                    msg=f"Issue loading ini file.\n"
+                        f"Check values and file location.\n"
+                        f"config.ini file should exist within the same directory as the executable.", error=True)
+                self.widget.setCurrentIndex(0)
+        except Exception as e:
+            logging.critical(f"Issue starting processing thread: {e}")
+
+    def update_total_frames(self) -> None:
+        try:
+            conf = configparser.ConfigParser()
+            conf.read_file(open(CONFIG_FILENAME, 'r'))
+            self.total_frames = int(conf['cal.trace']['total_frames'])
+        except Exception as e:
+            logging.critical(f"Issue while reading ini file: {e}")
 
     def data_queue_callback(self, data) -> None:
-        print(f"Data has arrived in the queue...{data}")
+        try:
+            logging.info(f"Data received from data queue: {data}")
+            progress_bar_val = int((data.current_frame / self.total_frames)*100)
+            if progress_bar_val > 100:
+                progress_bar_val = 100
+            self.progress_bar.setValue(progress_bar_val)
+            if data.finished:
+                logging.critical(f"Finished processing...")
+                # prompt(msg="Finished processing!\n"
+                #            "All data was stored in the following directory:"
+                #            f"{self.current_params.log_directory}\n"
+                #            f"Press OK to go back to the Main Page.",
+                #        error=False)
+                self.current_processor_thread.stop()
+                self.data_q = None
+                self.current_processor_thread = None
+        except Exception as e:
+            logging.critical(f"Error while calling data queue callback: {e}")
 
-    def start_processing(self) -> None:
-        success, processor_params = get_all_processor_params_from_ini(ini_fp=CONFIG_FILENAME)
-        data_q: queue.Queue = ProcessorQueueCallback(callback=self.data_queue_callback)
-        processor_thread = ProcessorThread(params=processor_params, data_queue=data_q)
-        processor_thread.daemon = False
-        processor_thread.start()
+    def cancel_btn_callback(self) -> None:
+        if confirm(msg=f"Are you sure you want to cancel?"):
+            self.current_processor_thread.stop()
+            self.widget.setCurrentIndex(0)
 
 
 def get_all_processor_params_from_ini(ini_fp: str) -> Tuple[bool, ProcessorParams] | Tuple[bool, None]:
@@ -850,6 +914,22 @@ def confirm(msg: str) -> bool:
         return False
 
 
+def prompt(msg: str, error: bool) -> None:
+    try:
+        msg_box = QMessageBox()
+        if error:
+            msg_type = QMessageBox.Critical
+        else:
+            msg_type = QMessageBox.Information
+        msg_box.setIcon(msg_type)
+        msg_box.setText(msg)
+        msg_box.setStandardButtons(QMessageBox.Ok)
+        val = msg_box.exec_()
+    except Exception as e:
+        logging.critical(f"Issue while using confirmation box: {e}")
+        return False
+
+
 #: Classes
 class ProcessorQueueCallback(queue.Queue):
     def __init__(self, callback=None, maxsize=0):
@@ -859,7 +939,15 @@ class ProcessorQueueCallback(queue.Queue):
     def put(self, item, block=True, timeout=None):
         super().put(item, block, timeout)
         if self.callback:
+            if self.qsize() > 100000:
+                while True:
+                    try:
+                        self.get_nowait()
+                    except (Exception, queue.Empty) as e:
+                        logging.critical(f"Error reported while clearing queue: {e}")
+                        break
             self.callback(item)
+
 
 
 class ProcessorThread(threading.Thread):
@@ -887,7 +975,6 @@ class ProcessorThread(threading.Thread):
                               text_img_threshold=self.params.text_img_threshold,
                               stop_event=self.stop_thread,
                               data_q=self.data_queue)
-
         processor.run()
 
     def stop(self) -> None:
@@ -903,10 +990,12 @@ def start() -> None:
     cal_window = CalibrationWindow(widget=widget)
     template_window = TemplateWindow(widget=widget)
     signal_window = SignalWindow(widget=widget)
+    progress_window = ProgressWindow(widget=widget)
     widget.addWidget(load_window)
     widget.addWidget(cal_window)
     widget.addWidget(template_window)
     widget.addWidget(signal_window)
+    widget.addWidget(progress_window)
     widget.show()
     template_window.go_to_signal_window_signal.connect(signal_window.signal_window_is_being_shown)
     load_window.move_to_cal_window_signal.connect(cal_window.moved_to_cal_window)
@@ -914,6 +1003,7 @@ def start() -> None:
     load_window.current_video_filepath_signal.connect(cal_window.get_current_video_filepath)
     load_window.current_video_filepath_signal.connect(template_window.get_current_video_filepath)
     load_window.current_video_filepath_signal.connect(signal_window.get_current_video_filepath)
+    signal_window.start_processor_signal.connect(progress_window.start_processing)
     app.exec_()
 
 

@@ -73,7 +73,7 @@ class Processor(object):
         os.makedirs(self.log_dir, exist_ok=True)
 
     def __del__(self):
-        exit()
+        logging.critical("Processor deinstantiating...")
 
     def run(self) -> None:
         logs: List[str] = []
@@ -98,10 +98,10 @@ class Processor(object):
                                              f"Video Filepath: {self.video_fp}\n"
                                              f"Template Filepath: {self.template_fp}\n"
                                              f"Video FPS: {self.fps}\n"
-                                             f"DBM Magnitude Limit (0 to 1): {self.dbm_thresh}\n"
+                                             f"dBm Magnitude Limit % of Ref Level (0 to 100.0): {self.dbm_thresh}\n"
                                              f"BGRA Minimum Trace Filter: {self.bgra_min_filter}\n"
                                              f"BGRA Maximum Trace Filter: {self.bgra_max_filter}\n\n\n"
-                                             f"Time (H:M:S:mS), \t(Xpos, Ypos):\n")
+                                             f"Time (Hour:Minute:Second:milliseconds), \t(Xpos, Ypos):\n")
         if self.record_max_signal_scaled:
             max_signal_log_filename: str = f'{test_cycle_dir}\\{heading}_max_signal_coordinates.csv'
             filestream_max_signal = open(max_signal_log_filename, 'a+')
@@ -109,10 +109,10 @@ class Processor(object):
                                         f"Video Filepath: {self.video_fp}\n"
                                         f"Template Filepath: {self.template_fp}\n"
                                         f"Video FPS: {self.fps}\n"
-                                        f"DBM Magnitude Limit (0 to 1): {self.dbm_thresh}\n"
+                                        f"dBm Magnitude Limit % of Ref Level (0 to 100.0): {self.dbm_thresh}\n"
                                         f"BGRA Minimum Trace Filter: {self.bgra_min_filter}\n"
                                         f"BGRA Maximum Trace Filter: {self.bgra_max_filter}\n\n\n"
-                                        f"Time (H:M:S:mS),\t(Freq, dBm):\n")
+                                        f"Time (Hour:Minute:Second:milliseconds),\t(Freq (hz), dBm):\n")
 
         if self.record_scaled_signal:
             scaled_signal_log_filename: str = f'{test_cycle_dir}\\{heading}_scaled_signal_coordinates.csv'
@@ -121,10 +121,10 @@ class Processor(object):
                                            f"Video Filepath: {self.video_fp}\n"
                                            f"Template Filepath: {self.template_fp}\n"
                                            f"Video FPS: {self.fps}\n"
-                                           f"DBM Magnitude Limit (0 to 1): {self.dbm_thresh}\n"
+                                           f"dBm Magnitude Limit % of Ref Level (0 to 100.0): {self.dbm_thresh}\n"
                                            f"BGRA Minimum Trace Filter: {self.bgra_min_filter}\n"
                                            f"BGRA Maximum Trace Filter: {self.bgra_max_filter}\n\n\n"
-                                           f"Time (H:M:S:mS),\t(Freq, dBm):\n")
+                                           f"Time (Hour:Minute:Second:milliseconds),\t(Freq (hz), dBm):\n")
 
         frame_counter: int = 0
         frame_thresholds: List[Tuple[bool, int]] = []
@@ -154,7 +154,8 @@ class Processor(object):
                     self.data_q.put(q_data)
         if self.scan_for_threshold and self.record_relative_signal:
             self.graph_dbm_thresholds(thresholds=frame_thresholds, total_frames=frame_counter, frames_per_sec=self.fps,
-                                      video_fp=self.video_fp, data_logfile=relative_log_filename)
+                                      video_fp=self.video_fp, data_logfile=relative_log_filename,
+                                      save_directory=test_cycle_dir)
 
         if filestream_relative_signal is not None:
             try:
@@ -174,31 +175,35 @@ class Processor(object):
                 logs.append(scaled_signal_log_filename)
             except Exception:
                 pass
-        cv2.destroyAllWindows()
-        logging.info(f"All logs recorded for this test cycle: {logs}")
+        #cv2.destroyAllWindows()
+        logging.info(f"Finished processing...")
         if self.data_q is not None:
             q_data = type.ProcessorQueueData(current_frame=frame_counter, logs=logs, finished=True)
             self.data_q.put(q_data)
 
     def graph_dbm_thresholds(self, thresholds: List[Tuple[bool, int]], total_frames: int, frames_per_sec: float,
-                             video_fp: str, data_logfile: str):
-        elapsed_time_s: float = (total_frames / frames_per_sec)
-        x_axis: List = []
-        y_axis: List = []
-        for i in range(len(thresholds)):
-            x_axis.append(thresholds[i][1] / frames_per_sec)
-            y_axis.append(int(thresholds[i][0]))
-        fig = go.Figure(go.Scatter(x=x_axis, y=y_axis, mode='lines'))
-        total_elapsed_datetime: timedelta = timedelta(seconds=elapsed_time_s)
-        fig.update_layout(title=f"Corresponding Logfile: {data_logfile}, "
-                                f"Total Elapsed Time: {total_elapsed_datetime}, "
-                                f"Video Filepath: {video_fp}, "
-                                f"Template Filepath: {self.template_fp}, "
-                                f"Video FPS: {frames_per_sec}, "
-                                f"DBM Magnitude Limit (0 to 1): {self.dbm_thresh}, "
-                                f"BGRA Minimum Trace Filter: {self.bgra_min_filter}, "
-                                f"BGRA Maximum Trace Filter: {self.bgra_max_filter}, ")
-        fig.show()
+                             video_fp: str, data_logfile: str, save_directory: str):
+        try:
+            elapsed_time_s: float = (total_frames / frames_per_sec)
+            x_axis: List = []
+            y_axis: List = []
+            for i in range(len(thresholds)):
+                x_axis.append(thresholds[i][1] / frames_per_sec)
+                y_axis.append(int(thresholds[i][0]))
+            fig = go.Figure(go.Scatter(x=x_axis, y=y_axis, mode='lines'))
+            total_elapsed_datetime: timedelta = timedelta(seconds=elapsed_time_s)
+            fig.update_layout(title=f"Corresponding Logfile: {data_logfile}, "
+                                    f"Total Elapsed Time: {total_elapsed_datetime}, "
+                                    f"Video Filepath: {video_fp}, "
+                                    f"Template Filepath: {self.template_fp}, "
+                                    f"Video FPS: {frames_per_sec}, "
+                                    f"DBM Magnitude Limit (0 to 1): {self.dbm_thresh}, "
+                                    f"BGRA Minimum Trace Filter: {self.bgra_min_filter}, "
+                                    f"BGRA Maximum Trace Filter: {self.bgra_max_filter}, ")
+            filename: str = f"{save_directory}/{type.get_datetime_heading()}_relative_signal_magnitude_failures.png"
+            fig.write_image(filename)
+        except Exception as e:
+            logging.critical(f"Issue while graphing signal threshold failures: {e}")
 
     def process_frame_signal_failures(self, frame: ndarray,
                                       template: ndarray,
@@ -383,9 +388,6 @@ def crop_template_from_frame(reference_frame: ndarray, template: ndarray,
 def draw_boxes_around_text_in_frame(frame: ndarray, text_to_find: List[str]) -> ndarray:
     try:
         frame_copy = frame.copy()
-        # gray = cv2.cvtColor(frame_copy, cv2.COLOR_BGR2GRAY)
-        # threshold_img = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
-        # boxes_threshold_img = threshold_img.copy()
         text_dataframe = pytesseract.image_to_data(frame_copy, lang="eng", config="--psm 6",
                                                    output_type=pytesseract.Output.DATAFRAME)
         frame_to_draw_on = frame.copy()
