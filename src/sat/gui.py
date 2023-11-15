@@ -1,25 +1,25 @@
-import configparser
+#!/usr/bin/env python3
+
+#: Imports
 import logging
+import configparser
 import os
 import queue
 import threading
-from types import NoneType
-from typing import Optional, Tuple, List
-
-import numpy
-from PyQt5.QtCore import Qt, QSize, QTimer, pyqtSignal
-from PyQt5.QtGui import QImage, QPalette, QBrush
-from numpy import ndarray
-
-import load_page
 import sys
+import numpy
+from typing import Tuple
+from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtGui import QImage
+from numpy import ndarray
 from PyQt5 import QtWidgets, QtGui, QtCore
-from PyQt5.QtWidgets import QMainWindow, QApplication, QPushButton, QLabel, QFileDialog, QDialog, QWidget, QMessageBox, \
-    QTextEdit, QVBoxLayout, QColorDialog, QLCDNumber, QSlider, QToolButton, QCheckBox, QProgressBar, QPlainTextEdit
+from PyQt5.QtWidgets import QMainWindow, QApplication, QPushButton, QLabel, QFileDialog, QMessageBox, \
+    QTextEdit, QColorDialog, QLCDNumber, QSlider, QToolButton, QCheckBox, QProgressBar, QPlainTextEdit, \
+    QDial
 from PyQt5 import uic
-from processor import get_video_config, cv2, get_frame_count, get_specific_frame, get_reference_frame, \
-    crop_template_from_frame, parse_trace_from_frame, load_template_im, show_frame, read_signal_levels_from_frame, \
-    draw_boxes_around_text_in_frame, get_preprocessed_image_for_text_detection, Processor
+from processor import get_video_config, get_frame_count_and_fps, get_specific_frame, get_reference_frame, \
+    crop_template_from_frame, parse_trace_from_frame, load_template_im, read_signal_levels_from_frame, \
+    get_preprocessed_image_for_text_detection, Processor
 from distribution import __app_name__, __app_version__
 from src.sat.type import ProcessorParams, get_datetime_heading
 
@@ -44,6 +44,7 @@ class MainWindow(QMainWindow):
         self.current_loaded_video_filepath: str = ""
         self.widget = widget
         self.load_video_btn = self.findChild(QPushButton, "loadVidBtn")
+        self.load_video_btn.setStyleSheet("background-color : #D8F5FF")
         self.load_video_btn.clicked.connect(self.load_video_btn_callback)
         self.start_processor_preset_btn = self.findChild(QToolButton, "startProcessorPresets")
         self.start_processor_preset_btn.setStyleSheet("background-color : #D0D0D0")
@@ -125,7 +126,8 @@ class MainWindow(QMainWindow):
 
 
 class CalibrationWindow(QMainWindow):
-    go_to_template_window_signal = pyqtSignal(bool)
+    go_to_template_window_signal: pyqtSignal = pyqtSignal(bool)
+    loaded_new_video_signal: pyqtSignal = pyqtSignal(bool)
 
     def __init__(self, widget: QtWidgets.QStackedWidget):
         super(CalibrationWindow, self).__init__()
@@ -156,16 +158,20 @@ class CalibrationWindow(QMainWindow):
         self.blue_lcd.display(b)
 
     def init_frame_slider(self):
-        total_frames: int = get_frame_count(filepath=self.current_video_filepath)
-        logging.info(f"Total amount of frames in {self.current_video_filepath}: {total_frames} frames")
+        total_frames, fps = get_frame_count_and_fps(filepath=self.current_video_filepath)
+        logging.info(f"Total amount of frames in {self.current_video_filepath}: {total_frames} frames\n"
+                     f"Total FPS: {fps}")
         self.frame_slider.setMinimum(0)
         self.frame_slider.setMaximum(total_frames)
         try:
             conf = configparser.ConfigParser()
             conf.read_file(open(CONFIG_FILENAME, 'r'))
             conf.set("cal.trace", "total_frames", str(total_frames))
+            conf.set("cal.signal", "maximum_frames_to_process_per_second", str(fps))
             with open(CONFIG_FILENAME, "w") as conf_file:
                 conf.write(conf_file)
+                #conf_file.close()
+            self.loaded_new_video_signal.emit(True)
         except Exception as e:
             logging.info(f"Error while loading rgb values: {e}")
 
@@ -486,6 +492,9 @@ class SignalWindow(QMainWindow):
         self.select_csv_filepath = self.findChild(QPushButton, "csvFilepathBtn")
         self.select_csv_filepath.clicked.connect(self.select_csv_filepath_callback)
         self.select_csv_filepath_text = self.findChild(QTextEdit, "csvFilepathLabel")
+        self.select_fps_dial: QSlider = self.findChild(QDial, "frameDial")
+        self.select_fps_dial.sliderReleased.connect(self.select_fps_dial_callback)
+        self.select_fps_lcd: QLCDNumber = self.findChild(QLCDNumber, "frameLcd")
 
         # Signal IDs
         self.center_freq_id = self.findChild(QTextEdit, "centerFreqID")
@@ -516,6 +525,20 @@ class SignalWindow(QMainWindow):
 
         self.init_sliders()
         self.initialize_signal_window()
+
+
+    def select_fps_dial_callback(self) -> None:
+        try:
+            conf = configparser.ConfigParser()
+            conf.read_file(open(CONFIG_FILENAME, 'r'))
+            val = int(self.select_fps_dial.value())
+            self.select_fps_lcd.display(val)
+            conf.set("cal.signal", "frames_to_process_per_second", str(val))
+            with open(CONFIG_FILENAME, "w") as conf_file:
+                conf.write(conf_file)
+            self.current_text_img_threshold = val
+        except Exception as e:
+            logging.critical(f"Issue while moving fps dial: {e}")
 
     def select_text_img_threshold_slider_callback(self) -> None:
         try:
@@ -587,12 +610,37 @@ class SignalWindow(QMainWindow):
                 self.scan_threshold_slider.setValue(int(config['cal.signal']['threshold_percent']))
                 self.threshold_lcd.display(int(config['cal.signal']['threshold_percent']))
                 total_frames = int(config['cal.trace']['total_frames'])
+                fps_max = int(config['cal.signal']['maximum_frames_to_process_per_second'])
+                self.select_fps_dial.setMinimum(1)
+                self.select_fps_dial.setMaximum(fps_max)
+                self.select_fps_dial.setValue(fps_max)
+                self.select_fps_dial.setMinimum(1)
+                self.select_fps_lcd.display(fps_max)
                 self.total_frames_in_video = total_frames
                 self.scan_text_slider.setMinimum(0)
                 self.scan_text_slider.setMaximum(total_frames)
         except Exception as e:
             logging.info(f"Error while initializing trace rgb slider: {e}")
 
+    @QtCore.pyqtSlot()
+    def update_ui_from_new_video_loaded(self) -> None:
+        try:
+
+            config = configparser.ConfigParser()
+            config.read_file(open(CONFIG_FILENAME, 'r'))
+            curr_max_fps = int(config['cal.signal']['maximum_frames_to_process_per_second'])
+            curr_fps_selected = int(config['cal.signal']['frames_to_process_per_second'])
+            if curr_fps_selected > curr_max_fps:
+                config.set("cal.signal", "frames_to_process_per_second", str(curr_max_fps))
+                self.select_fps_dial.setValue(1)
+                self.select_fps_dial.setMaximum(curr_max_fps)
+                self.select_fps_dial.setValue(curr_max_fps)
+                self.select_fps_lcd.display(curr_max_fps)
+            config.set("cal.signal", "maximum_frames_to_process_per_second", str(curr_max_fps))
+            with open(f"{CONFIG_FILENAME}", "w" ) as config_file:
+                config.write(config_file)
+        except Exception as e:
+            logging.critical(f"Issue while updating the ui due to a new video being loaded: {e}")
     @QtCore.pyqtSlot()
     def signal_window_is_being_shown(self) -> None:
         try:
@@ -814,6 +862,14 @@ class ProgressWindow(QMainWindow):
         self.total_frames: int = None
         self.current_params: ProcessorParams = None
         self.current_processor_thread: ProcessorThread = None
+        stylesheet = '''
+                    #MainWindow {
+                        background-image: url(loading_background.jpg);
+                        background-repeat: no-repeat;
+                        background-position: center;
+                    }
+                '''
+        self.setStyleSheet(stylesheet)
 
     @QtCore.pyqtSlot()
     def start_processing(self) -> None:
@@ -827,17 +883,10 @@ class ProgressWindow(QMainWindow):
                                                 f"{get_datetime_heading()}: Logs are being stored in: {self.current_params.log_directory}")
 
             if success:
-                if self.current_processor_thread is not None:
-                    print(f"thread is alive: {self.current_processor_thread.is_alive()}")
                 self.data_q: queue.Queue = ProcessorQueueCallback(callback=self.data_queue_callback)
                 self.current_processor_thread = ProcessorThread(params=self.current_params, data_queue=self.data_q)
                 self.current_processor_thread.daemon = False
                 self.current_processor_thread.start()
-                # q = ProcessorQueueCallback(callback=self.data_queue_callback)
-                # thread = ProcessorThread(params=self.current_params, data_queue=self.data_q)
-                # thread.daemon = False
-                # thread.start()
-                print(f"thread is alive: {self.current_processor_thread.is_alive()}")
             else:
                 prompt(
                     msg=f"Issue loading ini file.\n"
@@ -855,9 +904,6 @@ class ProgressWindow(QMainWindow):
             prompt(msg=f"Processing has finished! CSV log results will be stored in"
                        f"the following directory: {self.current_params.log_directory}",
                    error=False)
-            # del self.data_q
-            # del self.current_processor_thread
-            # del self.current_params
         except Exception as e:
             logging.critical(f"Error while finishing processor in progress window: {e}")
 
@@ -1062,10 +1108,11 @@ def start() -> None:
     signal_window.start_processor_signal.connect(progress_window.start_processing)
     load_window.start_processing_signal.connect(progress_window.start_processing)
     progress_window.finished_processing_signal.connect(progress_window.finished)
+    cal_window.loaded_new_video_signal.connect(signal_window.update_ui_from_new_video_loaded)
 
     app.exec_()
 
 
 #: Main entry point
-if __name__ == "__main__":
-    start()
+# if __name__ == "__main__":
+#     start()

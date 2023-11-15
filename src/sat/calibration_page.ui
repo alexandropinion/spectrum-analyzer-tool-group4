@@ -256,9 +256,9 @@
      <property name="geometry">
       <rect>
        <x>40</x>
-       <y>80</y>
+       <y>170</y>
        <width>861</width>
-       <height>631</height>
+       <height>541</height>
       </rect>
      </property>
      <property name="font">
@@ -268,6 +268,29 @@
      </property>
      <property name="text">
       <string/>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label">
+     <property name="geometry">
+      <rect>
+       <x>60</x>
+       <y>60</y>
+       <width>781</width>
+       <height>111</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>10</pointsize>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>This page assists in selecting the RGB colors of the trace of the signal. Select the &quot;User Color Picker&quot; button and clicked &quot;Pick Screen Color&quot; to dynamically choose the RGB trace point of interest. Once chosen, the selected pixel's RGB values will be gathered.</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
      </property>
     </widget>
    </widget>

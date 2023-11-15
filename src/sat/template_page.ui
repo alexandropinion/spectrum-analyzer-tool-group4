@@ -60,6 +60,9 @@
        <pointsize>12</pointsize>
       </font>
      </property>
+     <property name="toolTip">
+      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;This tool will use a reference image (cut out of the spectrum analyzers signal graph) to scan across each process frame in order accurately find the graph and signal values. Select a cutout image from the video being processed that captures only the graph of the screen.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+     </property>
      <property name="text">
       <string>Press to Select New Template</string>
      </property>

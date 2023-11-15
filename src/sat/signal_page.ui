@@ -612,17 +612,22 @@
     <widget class="QDial" name="frameDial">
      <property name="geometry">
       <rect>
-       <x>110</x>
+       <x>120</x>
        <y>260</y>
        <width>91</width>
        <height>71</height>
       </rect>
      </property>
+     <property name="font">
+      <font>
+       <pointsize>8</pointsize>
+      </font>
+     </property>
      <property name="minimum">
       <number>1</number>
      </property>
      <property name="maximum">
-      <number>30</number>
+      <number>120</number>
      </property>
     </widget>
     <widget class="QLCDNumber" name="frameLcd">
@@ -647,6 +652,9 @@
      <property name="segmentStyle">
       <enum>QLCDNumber::Flat</enum>
      </property>
+     <property name="value" stdset="0">
+      <double>1.000000000000000</double>
+     </property>
     </widget>
     <widget class="QLabel" name="label_15">
      <property name="geometry">
@@ -659,6 +667,27 @@
      </property>
      <property name="text">
       <string>fps</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_16">
+     <property name="geometry">
+      <rect>
+       <x>20</x>
+       <y>270</y>
+       <width>91</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>7</pointsize>
+      </font>
+     </property>
+     <property name="text">
+      <string>Fps to process:</string>
      </property>
      <property name="wordWrap">
       <bool>true</bool>

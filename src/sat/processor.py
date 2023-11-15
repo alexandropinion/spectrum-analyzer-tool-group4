@@ -345,9 +345,9 @@ def get_video_config(filepath: str) -> Tuple[float, bool, ndarray]:
     return fps, read, frame
 
 
-def get_frame_count(filepath: str) -> int:
+def get_frame_count_and_fps(filepath: str) -> Tuple[int, int]:
     capture = cv2.VideoCapture(filepath)
-    return int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+    return int(capture.get(cv2.CAP_PROP_FRAME_COUNT)), int(capture.get(cv2.CAP_PROP_FPS))
 
 
 def get_specific_frame(filepath: str, frame_num: int) -> ndarray:

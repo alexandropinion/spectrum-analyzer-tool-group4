@@ -2,14 +2,15 @@
 
 #: Imports
 import logging
+
+logging.basicConfig(format='%(asctime)s - %(funcName)s - %(levelname)s: %(message)s',
+                    level=logging.INFO,
+                    datefmt="%Y-%m-%d %H:%M:%S")
 from gui import start
 
 
 #: Main entry point
 def main() -> None:
-    logging.basicConfig(level=logging.DEBUG,
-                        format="%(asctime)s;%(levelname)s;%(message)s",
-                        datefmt="%Y-%m-%d %H:%M:%S")
     start()
 
 
