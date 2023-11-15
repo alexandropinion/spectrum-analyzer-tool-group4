@@ -7,7 +7,7 @@ from gui import start
 
 #: Main entry point
 def main() -> None:
-    logging.basicConfig(level=logging.INFO,
+    logging.basicConfig(level=logging.DEBUG,
                         format="%(asctime)s;%(levelname)s;%(message)s",
                         datefmt="%Y-%m-%d %H:%M:%S")
     start()

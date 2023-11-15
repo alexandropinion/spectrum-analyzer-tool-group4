@@ -17,7 +17,7 @@ If the customer would like to modify the existing code, the following enviroment
 
 - Python 3.11_64bit (recommended to utilize a virtual environment)
 - Install requirements.txt from the root folder in this project directory
-- For UI changes, activate virtual environment and/or IDE, and launch the designer with `qt5-tool designer` cmd from bash
+- For UI changes, activate virtual environment and/or IDE, and launch the designer with `qt5-tools designer` cmd from bash
   - Open any .ui file, make changes, save, and rebuild the associated .py file with:
     - `pyuic5 [ui_filename_here].ui -o [ui_filename_here].py` 
 - Building an executable:

@@ -35,6 +35,7 @@ class MainWindow(QMainWindow):
     current_video_filepath_signal: pyqtSignal = pyqtSignal(str)
     current_csv_filepath_signal: pyqtSignal = pyqtSignal(str)
     move_to_cal_window_signal: pyqtSignal = pyqtSignal(bool)
+    start_processing_signal: pyqtSignal = pyqtSignal(bool)
 
     def __init__(self, widget: QtWidgets.QStackedWidget):
         super(MainWindow, self).__init__()
@@ -57,9 +58,14 @@ class MainWindow(QMainWindow):
         self.setup_window_backgroud()
 
     def start_processor_preset_btn_callback(self) -> None:
-        start: bool = confirm(msg=f"Are you sure you want to start processing?")
+        start: bool = confirm(msg=f"Are you sure you want to begin processing with all of the preset values "
+                                  f"configured from the previous run?")
         if start:
-            print("temp start")
+            logging.info(f"Load window has requested to start processing with presets - moving to progress window...")
+            self.start_processing_signal.emit(True)
+            self.widget.setFixedWidth(DEFAULT_APP_WIDTH)
+            self.widget.setFixedHeight(DEFAULT_APP_HEIGHT)
+            self.widget.setCurrentIndex(4)
 
     def calibrate_processor_preset_btn_callback(self) -> None:
         self.go_to_calibration_window(filepath=self.current_loaded_video_filepath)
@@ -91,7 +97,7 @@ class MainWindow(QMainWindow):
                 self.calibrate_processor_preset_btn.setDisabled(False)
                 self.start_processor_preset_btn.setDisabled(False)
                 self.start_processor_preset_btn.setStyleSheet("background-color : #98F7C3")
-                self.calibrate_processor_preset_btn.setStyleSheet("background-color : #FFFFDD")
+                self.calibrate_processor_preset_btn.setStyleSheet("background-color : #82FFF9")
             except Exception as e:
                 msg = QMessageBox()
                 msg.setIcon(QMessageBox.Critical)
@@ -792,6 +798,7 @@ class SignalWindow(QMainWindow):
 
 
 class ProgressWindow(QMainWindow):
+    finished_processing_signal: pyqtSignal = pyqtSignal(bool)
 
     def __init__(self, widget: QtWidgets.QStackedWidget):
         super(ProgressWindow, self).__init__()
@@ -810,17 +817,27 @@ class ProgressWindow(QMainWindow):
 
     @QtCore.pyqtSlot()
     def start_processing(self) -> None:
+        self.widget.setFixedWidth(DEFAULT_MAIN_WINDOW_WIDTH)
+        self.widget.setFixedHeight(DEFAULT_MAIN_WINDOW_HEIGHT)
         try:
             success, self.current_params = get_all_processor_params_from_ini(ini_fp=CONFIG_FILENAME)
             self.update_total_frames()
             self.plain_text_box.appendPlainText(f"{get_datetime_heading()}: "
-                                        f"Processing the following video file: {self.current_params.video_fp}\n"
-                                        f"{get_datetime_heading()}: Logs are being stored in: {self.current_params.log_directory}")
+                                                f"Processing the following video file: {self.current_params.video_fp}\n"
+                                                f"{get_datetime_heading()}: Logs are being stored in: {self.current_params.log_directory}")
+
             if success:
+                if self.current_processor_thread is not None:
+                    print(f"thread is alive: {self.current_processor_thread.is_alive()}")
                 self.data_q: queue.Queue = ProcessorQueueCallback(callback=self.data_queue_callback)
                 self.current_processor_thread = ProcessorThread(params=self.current_params, data_queue=self.data_q)
                 self.current_processor_thread.daemon = False
                 self.current_processor_thread.start()
+                # q = ProcessorQueueCallback(callback=self.data_queue_callback)
+                # thread = ProcessorThread(params=self.current_params, data_queue=self.data_q)
+                # thread.daemon = False
+                # thread.start()
+                print(f"thread is alive: {self.current_processor_thread.is_alive()}")
             else:
                 prompt(
                     msg=f"Issue loading ini file.\n"
@@ -829,6 +846,20 @@ class ProgressWindow(QMainWindow):
                 self.widget.setCurrentIndex(0)
         except Exception as e:
             logging.critical(f"Issue starting processing thread: {e}")
+
+    @QtCore.pyqtSlot()
+    def finished(self) -> None:
+        try:
+            self.progress_bar.setValue(0)
+            logging.info(f"Finished signal has been emitted")
+            prompt(msg=f"Processing has finished! CSV log results will be stored in"
+                       f"the following directory: {self.current_params.log_directory}",
+                   error=False)
+            # del self.data_q
+            # del self.current_processor_thread
+            # del self.current_params
+        except Exception as e:
+            logging.critical(f"Error while finishing processor in progress window: {e}")
 
     def update_total_frames(self) -> None:
         try:
@@ -841,34 +872,55 @@ class ProgressWindow(QMainWindow):
     def data_queue_callback(self, data) -> None:
         try:
             logging.info(f"Data received from data queue: {data}")
-            progress_bar_val = int((data.current_frame / self.total_frames)*100)
+            progress_bar_val = int((data.current_frame / self.total_frames) * 100)
             if progress_bar_val > 100:
                 progress_bar_val = 100
             self.progress_bar.setValue(progress_bar_val)
             if data.finished:
                 logging.critical(f"Finished processing...")
+                self.finished_processing_signal.emit(True)
                 # prompt(msg="Finished processing!\n"
                 #            "All data was stored in the following directory:"
-                #            f"{self.current_params.log_directory}\n"
+                #            f"{0}\n"
                 #            f"Press OK to go back to the Main Page.",
                 #        error=False)
-                self.current_processor_thread.stop()
-                self.data_q = None
-                self.current_processor_thread = None
+
+                # self.data_q = None
+                # self.current_processor_thread.stop()
+                # self.current_processor_thread = None
+                # self.current_processor_thread = None
         except Exception as e:
             logging.critical(f"Error while calling data queue callback: {e}")
 
     def cancel_btn_callback(self) -> None:
         if confirm(msg=f"Are you sure you want to cancel?"):
+            self.progress_bar.setValue(0)
             self.current_processor_thread.stop()
+            self.widget.setFixedWidth(DEFAULT_MAIN_WINDOW_WIDTH)
+            self.widget.setFixedHeight(DEFAULT_MAIN_WINDOW_HEIGHT)
             self.widget.setCurrentIndex(0)
 
 
 def get_all_processor_params_from_ini(ini_fp: str) -> Tuple[bool, ProcessorParams] | Tuple[bool, None]:
+    logging.info(f"Requested config filepath: {ini_fp}")
+    try:
+        # Try to open the file with O_CREAT and O_EXCL flags
+        fd = os.open(CONFIG_FILENAME, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        os.close(fd)  # Close the file descriptor if opened successfully
+        logging.critical(f"Config file is not locked")
+    except OSError as e:
+        if e.errno == 17:  # Errno 17 corresponds to FileExistsError (file is locked)
+            logging.critical(f"Config file is locked  {e}")
+        else:
+            logging.critical(f"Config file is locked - file doesnt exist:: {e}")
+            return False, None
     try:
         conf = configparser.ConfigParser()
-        conf.read_file(open(ini_fp, 'r'))
-        return True, ProcessorParams(video_fp=conf['app']['load_video_filepath'],
+        params: ProcessorParams = None
+        with open(ini_fp, 'r') as config_file:
+            conf.read_file(config_file)
+            # conf.read_file(open(ini_fp, 'r'))
+            params = ProcessorParams(video_fp=conf['app']['load_video_filepath'],
                                      template_fp=conf['cal.template']['cal_template_filepath'],
                                      log_directory=conf['cal.signal']['csv_output_directory'],
                                      dbm_magnitude_threshold=float(conf['cal.signal']['threshold_percent']),
@@ -893,6 +945,8 @@ def get_all_processor_params_from_ini(ini_fp: str) -> Tuple[bool, ProcessorParam
                                          int(conf['cal.signal']['record_entire_signal_with_scaling_factors'])),
                                      record_max_signal_scaled=bool(
                                          int(conf['cal.signal']['record_only_max_signal_with_scaling_factors'])))
+
+        return True, params
     except Exception as e:
         logging.critical(f"Issue while grabbing all processor params from {ini_fp}: {e}")
         return False, None
@@ -939,15 +993,16 @@ class ProcessorQueueCallback(queue.Queue):
     def put(self, item, block=True, timeout=None):
         super().put(item, block, timeout)
         if self.callback:
-            if self.qsize() > 100000:
+            logging.debug(f"Writing data to the queue")
+            if self.qsize() > 10000:
                 while True:
                     try:
+                        logging.debug(f"Attempting to clear the queue")
                         self.get_nowait()
                     except (Exception, queue.Empty) as e:
                         logging.critical(f"Error reported while clearing queue: {e}")
                         break
             self.callback(item)
-
 
 
 class ProcessorThread(threading.Thread):
@@ -978,6 +1033,7 @@ class ProcessorThread(threading.Thread):
         processor.run()
 
     def stop(self) -> None:
+        logging.critical(f"Requesting to stop the current processing thread...")
         self.stop_thread.set()
 
 
@@ -1004,6 +1060,9 @@ def start() -> None:
     load_window.current_video_filepath_signal.connect(template_window.get_current_video_filepath)
     load_window.current_video_filepath_signal.connect(signal_window.get_current_video_filepath)
     signal_window.start_processor_signal.connect(progress_window.start_processing)
+    load_window.start_processing_signal.connect(progress_window.start_processing)
+    progress_window.finished_processing_signal.connect(progress_window.finished)
+
     app.exec_()
 
 

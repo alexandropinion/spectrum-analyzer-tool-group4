@@ -41,6 +41,7 @@ class Processor(object):
                  bgra_max_filter: List[float],
                  db_per_division: int,
                  text_img_threshold: int,
+                 frames_to_process_per_s: int = 1,
                  stop_event: threading.Event = None,
                  data_q: queue.Queue = None,
                  center_freq_id: str = "CENTER",
@@ -50,6 +51,7 @@ class Processor(object):
                  record_relative_signal: bool = True,
                  record_scaled_signal: bool = True,
                  record_max_signal_scaled: bool = False):
+        self.frames_to_process_per_sec = frames_to_process_per_s
         self.text_img_threshold = text_img_threshold
         self.db_per_division = db_per_division
         self.video_fp = video_fp
@@ -74,6 +76,7 @@ class Processor(object):
 
     def __del__(self):
         logging.critical("Processor deinstantiating...")
+        #self.data_q = None
 
     def run(self) -> None:
         logs: List[str] = []
@@ -91,6 +94,7 @@ class Processor(object):
         filestream_relative_signal = None
         filestream_max_signal = None
         filestream_scaled_signal = None
+        kill_runner: bool = False  # If we request to end the processing loop, we will set this flag to True
         if self.record_relative_signal:
             relative_log_filename: str = f'{test_cycle_dir}\\{heading}_relative_signal_coordinates.csv'
             filestream_relative_signal = open(relative_log_filename, 'a+')
@@ -102,6 +106,7 @@ class Processor(object):
                                              f"BGRA Minimum Trace Filter: {self.bgra_min_filter}\n"
                                              f"BGRA Maximum Trace Filter: {self.bgra_max_filter}\n\n\n"
                                              f"Time (Hour:Minute:Second:milliseconds), \t(Xpos, Ypos):\n")
+            logs.append(relative_log_filename)
         if self.record_max_signal_scaled:
             max_signal_log_filename: str = f'{test_cycle_dir}\\{heading}_max_signal_coordinates.csv'
             filestream_max_signal = open(max_signal_log_filename, 'a+')
@@ -113,7 +118,7 @@ class Processor(object):
                                         f"BGRA Minimum Trace Filter: {self.bgra_min_filter}\n"
                                         f"BGRA Maximum Trace Filter: {self.bgra_max_filter}\n\n\n"
                                         f"Time (Hour:Minute:Second:milliseconds),\t(Freq (hz), dBm):\n")
-
+            logs.append(relative_log_filename)
         if self.record_scaled_signal:
             scaled_signal_log_filename: str = f'{test_cycle_dir}\\{heading}_scaled_signal_coordinates.csv'
             filestream_scaled_signal = open(scaled_signal_log_filename, 'a+')
@@ -125,6 +130,7 @@ class Processor(object):
                                            f"BGRA Minimum Trace Filter: {self.bgra_min_filter}\n"
                                            f"BGRA Maximum Trace Filter: {self.bgra_max_filter}\n\n\n"
                                            f"Time (Hour:Minute:Second:milliseconds),\t(Freq (hz), dBm):\n")
+            logs.append(relative_log_filename)
 
         frame_counter: int = 0
         frame_thresholds: List[Tuple[bool, int]] = []
@@ -148,37 +154,39 @@ class Processor(object):
                 frame_thresholds.append((frame_threshold_found, frame_counter))
                 if self.stop_event.is_set():
                     logging.critical(f"Ending Processor...")
-                    self.__del__()
+                    kill_runner = True
+                    break
                 if self.data_q is not None:
+                    logging.info(f"Queue is not of None value: Writing data from processesor...")
                     q_data.current_frame = frame_counter
+                    q_data.logs = logs
                     self.data_q.put(q_data)
-        if self.scan_for_threshold and self.record_relative_signal:
-            self.graph_dbm_thresholds(thresholds=frame_thresholds, total_frames=frame_counter, frames_per_sec=self.fps,
-                                      video_fp=self.video_fp, data_logfile=relative_log_filename,
-                                      save_directory=test_cycle_dir)
+        if not kill_runner:
+            if self.scan_for_threshold and self.record_relative_signal:
+                self.graph_dbm_thresholds(thresholds=frame_thresholds, total_frames=frame_counter, frames_per_sec=self.fps,
+                                          video_fp=self.video_fp, data_logfile=relative_log_filename,
+                                          save_directory=test_cycle_dir)
 
         if filestream_relative_signal is not None:
             try:
                 filestream_relative_signal.close()
-                logs.append(relative_log_filename)
             except Exception:
                 pass
         if filestream_max_signal is not None:
             try:
                 filestream_max_signal.close()
-                logs.append(max_signal_log_filename)
             except Exception:
                 pass
         if filestream_scaled_signal is not None:
             try:
                 filestream_scaled_signal.close()
-                logs.append(scaled_signal_log_filename)
             except Exception:
                 pass
-        #cv2.destroyAllWindows()
+
         logging.info(f"Finished processing...")
         if self.data_q is not None:
-            q_data = type.ProcessorQueueData(current_frame=frame_counter, logs=logs, finished=True)
+            logging.debug(f"FINISHED: Data queue in processor is not empty: Sending finish command")
+            q_data = type.ProcessorQueueData(current_frame=100, logs=logs, finished=True)
             self.data_q.put(q_data)
 
     def graph_dbm_thresholds(self, thresholds: List[Tuple[bool, int]], total_frames: int, frames_per_sec: float,
