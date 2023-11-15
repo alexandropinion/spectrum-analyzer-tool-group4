@@ -40,6 +40,7 @@ class Processor(object):
                  bgra_min_filter: List[float],
                  bgra_max_filter: List[float],
                  db_per_division: int,
+                 total_db_divisions: int,
                  text_img_threshold: int,
                  frames_to_process_per_s: int = 1,
                  stop_event: threading.Event = None,
@@ -51,6 +52,7 @@ class Processor(object):
                  record_relative_signal: bool = True,
                  record_scaled_signal: bool = True,
                  record_max_signal_scaled: bool = False):
+        self.total_db_divisions = total_db_divisions
         self.frames_to_process_per_sec = frames_to_process_per_s
         self.text_img_threshold = text_img_threshold
         self.db_per_division = db_per_division
@@ -76,7 +78,7 @@ class Processor(object):
 
     def __del__(self):
         logging.critical("Processor deinstantiating...")
-        #self.data_q = None
+        # self.data_q = None
 
     def run(self) -> None:
         # Run Config - Values:
@@ -88,7 +90,7 @@ class Processor(object):
         self.fps = capture.get(cv2.CAP_PROP_FPS)
         reading: bool = True
         heading = type.get_datetime_heading()
-        test_cycle_dir: str = f"{self.log_dir}\\{heading}_cycle"
+        test_cycle_dir: str = f"{self.log_dir}\\{heading}_spectrum_analyzer_tool_capture_cycle"
         os.makedirs(test_cycle_dir, exist_ok=True)
         relative_log_filename: str = ''
         max_signal_log_filename: str = ''
@@ -177,7 +179,8 @@ class Processor(object):
         #: Run cleanup
         if not kill_runner:
             if self.scan_for_threshold and self.record_relative_signal:
-                self.graph_dbm_thresholds(thresholds=frame_thresholds, total_frames=frame_counter, frames_per_sec=self.fps,
+                self.graph_dbm_thresholds(thresholds=frame_thresholds, total_frames=frame_counter,
+                                          frames_per_sec=self.fps,
                                           video_fp=self.video_fp, data_logfile=relative_log_filename,
                                           save_directory=test_cycle_dir)
 
@@ -259,15 +262,10 @@ class Processor(object):
                                         scaled_signal_filestream=scaled_signal_filestream,
                                         record_max_coordinate=record_max_coordinate,
                                         record_scaled_coordinate=record_scaled_coordinate,
-                                        record_relative_coordinate=record_relative_coordinate
+                                        record_relative_coordinate=record_relative_coordinate,
+                                        inverse_cropped_img=inverse_cropped_img
                                         ))
 
-        if record_max_coordinate or record_scaled_coordinate:
-            successful, center_freq, reference_level, span_freq = (
-                read_signal_levels_from_frame(
-                    frame=inverse_cropped_img, center_freq_tag=self.cf_tag,
-                    reference_level_tag=self.ref_lvl_tag, span_tag=self.span_tag,
-                    text_img_threshold=self.text_img_threshold))
         return under_threshold
 
     def scan_for_dbm_threshold(self,
@@ -276,6 +274,7 @@ class Processor(object):
                                bgra_min_limit: List[float],
                                bgra_max_limit: List[float],
                                dbm_threshold: float,
+                               inverse_cropped_img: ndarray,
                                relative_signal_filestream: Optional[TextIO | None] = None,
                                max_signal_filestream: Optional[TextIO | None] = None,
                                scaled_signal_filestream: Optional[TextIO | None] = None,
@@ -294,12 +293,14 @@ class Processor(object):
                                              scaled_signal_filestream=scaled_signal_filestream,
                                              record_max_coordinate=record_max_coordinate,
                                              record_scaled_coordinate=record_scaled_coordinate,
-                                             record_relative_coordinate=record_relative_coordinate))
+                                             record_relative_coordinate=record_relative_coordinate,
+                                             inverse_cropped_img=inverse_cropped_img))
         return under_threshold, coordinates
 
     def parse_datapoints_from_frame(self, frame: ndarray, curr_frame_index: int,
                                     bgra_min_limit: List[float], bgra_max_limit: List[float],
                                     dbm_threshold: float,
+                                    inverse_cropped_img: ndarray,
                                     relative_signal_filestream: Optional[TextIO | None] = None,
                                     max_signal_filestream: Optional[TextIO | None] = None,
                                     scaled_signal_filestream: Optional[TextIO | None] = None,
@@ -310,8 +311,23 @@ class Processor(object):
         height = len(frame)
         width = len(frame[0])
         coord = cv2.findNonZero(mask)
+
+        # Grab signal characteristics from frame if desired.
+        grab_dynamic_signal_characteristics: bool = False
+        image_center_freq: float = 0.0
+        image_ref_level: float = 0.0
+        image_span_freq: float = 0.0
+        if record_max_coordinate or record_scaled_coordinate:
+            grab_dynamic_signal_characteristics, image_ref_level, image_center_freq, image_span_freq = (
+                read_signal_levels_from_frame(
+                    frame=inverse_cropped_img, center_freq_tag=self.cf_tag,
+                    reference_level_tag=self.ref_lvl_tag, span_tag=self.span_tag,
+                    text_img_threshold=self.text_img_threshold))
+
         normalized_coordinates: List[Tuple[float, float]] = []
+        scaled_signal: List[Tuple[float, float]] = []
         under_threshold: bool = False
+        max_coordinate = [0, 0]  # (x, y)
         if coord is not None:
             for i in range(len(coord)):
                 for k in range(len(coord[i])):
@@ -319,16 +335,38 @@ class Processor(object):
                     curr_y_normalized = coord[i][k][1] / height
                     normalized_element = (curr_x_normalized, curr_y_normalized)
                     normalized_coordinates.append(normalized_element)
+                    if record_max_coordinate and grab_dynamic_signal_characteristics:
+                        if curr_y_normalized > max_coordinate[1]:
+                            max_coordinate[1] = curr_y_normalized
+                            max_coordinate[0] = curr_x_normalized
+                    if record_scaled_coordinate and grab_dynamic_signal_characteristics:
+                        curr_freq = round(curr_x_normalized * (image_center_freq + (image_span_freq / 2)))
+                        total_db_range = self.total_db_divisions * self.db_per_division
+                        scaled_db_signal = curr_y_normalized * total_db_range
+                        final_db_signal = round(image_ref_level - (total_db_range - scaled_db_signal), 2)
+                        signal = (curr_freq, final_db_signal)
+                        scaled_signal.append(signal)
+
                     if curr_y_normalized > dbm_threshold:  # coordinates start at top-left
                         under_threshold = True
         formatted_time = type.convert_seconds_to_datetime_hour_min_sec_ms(seconds=curr_frame_index / self.fps)
         try:
             if relative_signal_filestream is not None and record_relative_coordinate is True:
                 relative_signal_filestream.write(f"{formatted_time}, {','.join(map(str, normalized_coordinates))}\n")
-            if max_signal_filestream is not None and record_max_coordinate is True:
-                max_signal_filestream.write(f"{formatted_time}, {','.join(map(str, normalized_coordinates))}\n")
-            if scaled_signal_filestream is not None and record_scaled_coordinate is True:
-                scaled_signal_filestream.write(f"{formatted_time}, {','.join(map(str, normalized_coordinates))}\n")
+            if (max_signal_filestream is not None and
+                    record_max_coordinate is True and
+                    grab_dynamic_signal_characteristics is True):
+                curr_freq = round(max_coordinate[0] * (image_center_freq + (image_span_freq / 2)))
+                total_db_range = self.total_db_divisions * self.db_per_division
+
+                scaled_db_signal = max_coordinate[1] * total_db_range
+                final_db_signal = round(image_ref_level - (total_db_range - scaled_db_signal), 2)
+                max_signal_val = (curr_freq, final_db_signal)
+                max_signal_filestream.write(f"{formatted_time}, {','.join(map(str, max_signal_val))}\n")
+            if (scaled_signal_filestream is not None and
+                    record_scaled_coordinate is True and
+                    grab_dynamic_signal_characteristics is True):
+                scaled_signal_filestream.write(f"{formatted_time}, {','.join(map(str, scaled_signal))}\n")
         except Exception as e:
             logging.info(f"Issue while writing to filestream: {e}")
         return normalized_coordinates, under_threshold
@@ -617,7 +655,6 @@ def get_graph_value_str(text: str, tag: str, units: List[str], text_position: in
 
 def get_current_frame_counter(current_frame_count: int, frames_to_process_per_sec: int, fps: int) -> int:
     frame_count_remainder = (current_frame_count & fps) / fps
-    print(f"remainder = {frame_count_remainder}")
     frame_count_delta = fps - frames_to_process_per_sec
     frame_count_in_this_second = int(frame_count_remainder * fps)
     desired_frame_count: int = 0
@@ -625,13 +662,6 @@ def get_current_frame_counter(current_frame_count: int, frames_to_process_per_se
         desired_frame_count = current_frame_count + frame_count_delta
     else:
         desired_frame_count = current_frame_count + 1
-    print(f"frame count remainder: {frame_count_remainder}\n"
-          f"frames count delta: {frame_count_delta}\n"
-          f"frame count this second: {frame_count_in_this_second}\n"
-          f"desired frame count = {desired_frame_count}\n"
-          f"current frame = {current_frame_count}\n"
-          f"frames to process per sec: {frames_to_process_per_sec}\n"
-          f"fps = {fps}")
     return desired_frame_count
 
 

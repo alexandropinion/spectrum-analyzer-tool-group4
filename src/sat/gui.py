@@ -965,6 +965,7 @@ def get_all_processor_params_from_ini(ini_fp: str) -> Tuple[bool, ProcessorParam
                                                       int(conf['cal.template']['green_max']),
                                                       int(conf['cal.template']['red_max']),
                                                       255],
+                                     total_num_db_divisions=int(conf['cal.signal']['total_db_divisions']),
                                      frames_to_read_per_sec=int(conf['cal.signal']['frames_to_process_per_second']),
                                      db_per_division=int(conf['cal.signal']['db_per_division']),
                                      text_img_threshold=int(conf['cal.signal']['text_image_threshold']),
@@ -1064,7 +1065,8 @@ class ProcessorThread(threading.Thread):
                               center_freq_id=self.params.center_freq_id,
                               text_img_threshold=self.params.text_img_threshold,
                               stop_event=self.stop_thread,
-                              data_q=self.data_queue)
+                              data_q=self.data_queue,
+                              total_db_divisions=self.params.total_num_db_divisions)
         processor.run()
 
     def stop(self) -> None:

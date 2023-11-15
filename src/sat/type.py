@@ -30,6 +30,7 @@ class ProcessorParams:
     bgra_min_filter: List[float]
     bgra_max_filter: List[float]
     db_per_division: int
+    total_num_db_divisions: int
     text_img_threshold: int
     frames_to_read_per_sec: int = 1
     center_freq_id: str = "CENTER"
