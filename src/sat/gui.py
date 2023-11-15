@@ -170,7 +170,7 @@ class CalibrationWindow(QMainWindow):
             conf.set("cal.signal", "maximum_frames_to_process_per_second", str(fps))
             with open(CONFIG_FILENAME, "w") as conf_file:
                 conf.write(conf_file)
-                #conf_file.close()
+                # conf_file.close()
             self.loaded_new_video_signal.emit(True)
         except Exception as e:
             logging.info(f"Error while loading rgb values: {e}")
@@ -526,7 +526,6 @@ class SignalWindow(QMainWindow):
         self.init_sliders()
         self.initialize_signal_window()
 
-
     def select_fps_dial_callback(self) -> None:
         try:
             conf = configparser.ConfigParser()
@@ -637,10 +636,11 @@ class SignalWindow(QMainWindow):
                 self.select_fps_dial.setValue(curr_max_fps)
                 self.select_fps_lcd.display(curr_max_fps)
             config.set("cal.signal", "maximum_frames_to_process_per_second", str(curr_max_fps))
-            with open(f"{CONFIG_FILENAME}", "w" ) as config_file:
+            with open(f"{CONFIG_FILENAME}", "w") as config_file:
                 config.write(config_file)
         except Exception as e:
             logging.critical(f"Issue while updating the ui due to a new video being loaded: {e}")
+
     @QtCore.pyqtSlot()
     def signal_window_is_being_shown(self) -> None:
         try:
@@ -855,7 +855,7 @@ class ProgressWindow(QMainWindow):
         uic.loadUi("progress_page.ui", self)
         self.progress_bar = self.findChild(QProgressBar, "progressBar")
         self.cancel_btn = self.findChild(QPushButton, "cancelBtn")
-        self.cancel_btn.setStyleSheet("background-color : #FF4848")
+        self.cancel_btn.setStyleSheet("background-color : #FFC2B9")
         self.plain_text_box = self.findChild(QPlainTextEdit, "progressText")
         self.cancel_btn.clicked.connect(self.cancel_btn_callback)
         self.data_q: queue.Queue = None
@@ -878,9 +878,10 @@ class ProgressWindow(QMainWindow):
         try:
             success, self.current_params = get_all_processor_params_from_ini(ini_fp=CONFIG_FILENAME)
             self.update_total_frames()
-            self.plain_text_box.appendPlainText(f"{get_datetime_heading()}: "
-                                                f"Processing the following video file: {self.current_params.video_fp}\n"
-                                                f"{get_datetime_heading()}: Logs are being stored in: {self.current_params.log_directory}")
+            self.plain_text_box.appendPlainText(
+                f"{get_datetime_heading()}: "
+                f"Processing the following video file: {self.current_params.video_fp}\n"
+                f"{get_datetime_heading()}: Logs are being stored in: {self.current_params.log_directory}")
 
             if success:
                 self.data_q: queue.Queue = ProcessorQueueCallback(callback=self.data_queue_callback)
@@ -917,31 +918,28 @@ class ProgressWindow(QMainWindow):
 
     def data_queue_callback(self, data) -> None:
         try:
-            logging.info(f"Data received from data queue: {data}")
-            progress_bar_val = int((data.current_frame / self.total_frames) * 100)
+            logging.debug(f"Data received from data queue: {data}")
+            curr_frame = data.current_frame
+            progress_bar_val = int((curr_frame / self.total_frames) * 100)
             if progress_bar_val > 100:
                 progress_bar_val = 100
             self.progress_bar.setValue(progress_bar_val)
             if data.finished:
                 logging.critical(f"Finished processing...")
+                self.plain_text_box.appendPlainText(
+                         f"{get_datetime_heading()}: Video file processing ending...")
                 self.finished_processing_signal.emit(True)
-                # prompt(msg="Finished processing!\n"
-                #            "All data was stored in the following directory:"
-                #            f"{0}\n"
-                #            f"Press OK to go back to the Main Page.",
-                #        error=False)
-
-                # self.data_q = None
-                # self.current_processor_thread.stop()
-                # self.current_processor_thread = None
-                # self.current_processor_thread = None
         except Exception as e:
             logging.critical(f"Error while calling data queue callback: {e}")
 
     def cancel_btn_callback(self) -> None:
-        if confirm(msg=f"Are you sure you want to cancel?"):
+        if confirm(msg=f"Are you sure you want to return to Main Menu?\n\n"
+                       f"If a video is being processed, it will be terminated."):
             self.progress_bar.setValue(0)
-            self.current_processor_thread.stop()
+            try:
+                self.current_processor_thread.stop()
+            except Exception as e:
+                logging.critical(f"No thread running...{e}")
             self.widget.setFixedWidth(DEFAULT_MAIN_WINDOW_WIDTH)
             self.widget.setFixedHeight(DEFAULT_MAIN_WINDOW_HEIGHT)
             self.widget.setCurrentIndex(0)
@@ -949,17 +947,17 @@ class ProgressWindow(QMainWindow):
 
 def get_all_processor_params_from_ini(ini_fp: str) -> Tuple[bool, ProcessorParams] | Tuple[bool, None]:
     logging.info(f"Requested config filepath: {ini_fp}")
-    try:
-        # Try to open the file with O_CREAT and O_EXCL flags
-        fd = os.open(CONFIG_FILENAME, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        os.close(fd)  # Close the file descriptor if opened successfully
-        logging.critical(f"Config file is not locked")
-    except OSError as e:
-        if e.errno == 17:  # Errno 17 corresponds to FileExistsError (file is locked)
-            logging.critical(f"Config file is locked  {e}")
-        else:
-            logging.critical(f"Config file is locked - file doesnt exist:: {e}")
-            return False, None
+    # try:
+    #     # Try to open the file with O_CREAT and O_EXCL flags
+    #     fd = os.open(CONFIG_FILENAME, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    #     os.close(fd)  # Close the file descriptor if opened successfully
+    #     logging.critical(f"Config file is not locked")
+    # except OSError as e:
+    #     if e.errno == 17:  # Errno 17 corresponds to FileExistsError (file is locked)
+    #         logging.critical(f"Config file is locked  {e}")
+    #     else:
+    #         logging.critical(f"Config file is locked - file doesnt exist:: {e}")
+    #         return False, None
     try:
         conf = configparser.ConfigParser()
         params: ProcessorParams = None
@@ -978,6 +976,7 @@ def get_all_processor_params_from_ini(ini_fp: str) -> Tuple[bool, ProcessorParam
                                                       int(conf['cal.template']['green_max']),
                                                       int(conf['cal.template']['red_max']),
                                                       255],
+                                     frames_to_read_per_sec=int(conf['cal.signal']['frames_to_process_per_second']),
                                      db_per_division=int(conf['cal.signal']['db_per_division']),
                                      text_img_threshold=int(conf['cal.signal']['text_image_threshold']),
                                      center_freq_id=conf['cal.signal']['center_freq_text'],
@@ -1111,7 +1110,6 @@ def start() -> None:
     cal_window.loaded_new_video_signal.connect(signal_window.update_ui_from_new_video_loaded)
 
     app.exec_()
-
 
 #: Main entry point
 # if __name__ == "__main__":

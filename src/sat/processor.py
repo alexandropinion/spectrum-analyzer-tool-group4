@@ -157,7 +157,7 @@ class Processor(object):
                     kill_runner = True
                     break
                 if self.data_q is not None:
-                    logging.info(f"Queue is not of None value: Writing data from processesor...")
+                    logging.debug(f"Queue is not of None value: Writing data from processesor...")
                     q_data.current_frame = frame_counter
                     q_data.logs = logs
                     self.data_q.put(q_data)

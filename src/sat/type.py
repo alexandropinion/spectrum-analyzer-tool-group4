@@ -31,6 +31,7 @@ class ProcessorParams:
     bgra_max_filter: List[float]
     db_per_division: int
     text_img_threshold: int
+    frames_to_read_per_sec: int = 1
     center_freq_id: str = "CENTER"
     ref_lvl_id: str = "RL"
     span_lvl_id: str = "SPAN"

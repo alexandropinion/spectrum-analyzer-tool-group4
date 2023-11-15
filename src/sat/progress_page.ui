@@ -29,7 +29,7 @@
      </font>
     </property>
     <property name="title">
-     <string>Video Processing in Progress...</string>
+     <string>Video Processing Progress:</string>
     </property>
     <widget class="QPushButton" name="cancelBtn">
      <property name="geometry">
@@ -37,12 +37,14 @@
        <x>260</x>
        <y>510</y>
        <width>541</width>
-       <height>101</height>
+       <height>111</height>
       </rect>
      </property>
      <property name="font">
       <font>
-       <pointsize>12</pointsize>
+       <pointsize>16</pointsize>
+       <weight>75</weight>
+       <bold>true</bold>
       </font>
      </property>
      <property name="toolTip">
@@ -52,7 +54,7 @@
       <bool>false</bool>
      </property>
      <property name="text">
-      <string>Press to Cancel</string>
+      <string>Press to go to Main Menu</string>
      </property>
      <property name="default">
       <bool>true</bool>
@@ -69,6 +71,11 @@
        <width>861</width>
        <height>291</height>
       </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>14</pointsize>
+      </font>
      </property>
     </widget>
     <widget class="QProgressBar" name="progressBar">
@@ -87,6 +94,24 @@
      </property>
      <property name="value">
       <number>0</number>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label">
+     <property name="geometry">
+      <rect>
+       <x>400</x>
+       <y>590</y>
+       <width>341</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>10</pointsize>
+      </font>
+     </property>
+     <property name="text">
+      <string>Note: Test will end if in progress</string>
      </property>
     </widget>
    </widget>
