@@ -609,15 +609,15 @@ class SignalWindow(QMainWindow):
                 self.scan_threshold_slider.setValue(int(config['cal.signal']['threshold_percent']))
                 self.threshold_lcd.display(int(config['cal.signal']['threshold_percent']))
                 total_frames = int(config['cal.trace']['total_frames'])
-                fps_max = int(config['cal.signal']['maximum_frames_to_process_per_second'])
-                self.select_fps_dial.setMinimum(1)
-                self.select_fps_dial.setMaximum(fps_max)
-                self.select_fps_dial.setValue(fps_max)
-                self.select_fps_dial.setMinimum(1)
-                self.select_fps_lcd.display(fps_max)
                 self.total_frames_in_video = total_frames
                 self.scan_text_slider.setMinimum(0)
                 self.scan_text_slider.setMaximum(total_frames)
+                fps_max = int(config['cal.signal']['maximum_frames_to_process_per_second'])
+                current_fps = int(config['cal.signal']['frames_to_process_per_second'])
+                self.select_fps_dial.setMinimum(1)
+                self.select_fps_dial.setMaximum(fps_max)
+                self.select_fps_dial.setValue(current_fps)
+                self.select_fps_lcd.display(current_fps)
         except Exception as e:
             logging.info(f"Error while initializing trace rgb slider: {e}")
 
@@ -873,8 +873,8 @@ class ProgressWindow(QMainWindow):
 
     @QtCore.pyqtSlot()
     def start_processing(self) -> None:
-        self.widget.setFixedWidth(DEFAULT_MAIN_WINDOW_WIDTH)
-        self.widget.setFixedHeight(DEFAULT_MAIN_WINDOW_HEIGHT)
+        self.widget.setFixedWidth(DEFAULT_APP_WIDTH)
+        self.widget.setFixedHeight(DEFAULT_APP_HEIGHT)
         try:
             success, self.current_params = get_all_processor_params_from_ini(ini_fp=CONFIG_FILENAME)
             self.update_total_frames()
@@ -947,17 +947,6 @@ class ProgressWindow(QMainWindow):
 
 def get_all_processor_params_from_ini(ini_fp: str) -> Tuple[bool, ProcessorParams] | Tuple[bool, None]:
     logging.info(f"Requested config filepath: {ini_fp}")
-    # try:
-    #     # Try to open the file with O_CREAT and O_EXCL flags
-    #     fd = os.open(CONFIG_FILENAME, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-    #     os.close(fd)  # Close the file descriptor if opened successfully
-    #     logging.critical(f"Config file is not locked")
-    # except OSError as e:
-    #     if e.errno == 17:  # Errno 17 corresponds to FileExistsError (file is locked)
-    #         logging.critical(f"Config file is locked  {e}")
-    #     else:
-    #         logging.critical(f"Config file is locked - file doesnt exist:: {e}")
-    #         return False, None
     try:
         conf = configparser.ConfigParser()
         params: ProcessorParams = None
@@ -967,7 +956,7 @@ def get_all_processor_params_from_ini(ini_fp: str) -> Tuple[bool, ProcessorParam
             params = ProcessorParams(video_fp=conf['app']['load_video_filepath'],
                                      template_fp=conf['cal.template']['cal_template_filepath'],
                                      log_directory=conf['cal.signal']['csv_output_directory'],
-                                     dbm_magnitude_threshold=float(conf['cal.signal']['threshold_percent']),
+                                     dbm_magnitude_threshold=float(conf['cal.signal']['threshold_percent'])/100.0,
                                      bgra_min_filter=[int(conf['cal.template']['blue_min']),
                                                       int(conf['cal.template']['green_min']),
                                                       int(conf['cal.template']['red_min']),
@@ -1068,6 +1057,7 @@ class ProcessorThread(threading.Thread):
                               record_max_signal_scaled=self.params.record_max_signal_scaled,
                               record_scaled_signal=self.params.record_scaled_signal,
                               record_relative_signal=self.params.record_relative_signal,
+                              frames_to_process_per_s=self.params.frames_to_read_per_sec,
                               ref_lvl_id=self.params.ref_lvl_id,
                               scan_for_relative_threshold=self.params.scan_for_relative_threshold,
                               span_lvl_id=self.params.span_lvl_id,

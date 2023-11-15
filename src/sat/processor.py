@@ -79,10 +79,12 @@ class Processor(object):
         #self.data_q = None
 
     def run(self) -> None:
+        # Run Config - Values:
         logs: List[str] = []
         logging.info(f"Attempting to load video from filepath {self.video_fp}...")
         template = load_template_im(template_img_fp=self.template_fp)
         capture = cv2.VideoCapture(self.video_fp)
+        total_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
         self.fps = capture.get(cv2.CAP_PROP_FPS)
         reading: bool = True
         heading = type.get_datetime_heading()
@@ -95,6 +97,8 @@ class Processor(object):
         filestream_max_signal = None
         filestream_scaled_signal = None
         kill_runner: bool = False  # If we request to end the processing loop, we will set this flag to True
+
+        #: Run Config - Logs
         if self.record_relative_signal:
             relative_log_filename: str = f'{test_cycle_dir}\\{heading}_relative_signal_coordinates.csv'
             filestream_relative_signal = open(relative_log_filename, 'a+')
@@ -132,17 +136,23 @@ class Processor(object):
                                            f"Time (Hour:Minute:Second:milliseconds),\t(Freq (hz), dBm):\n")
             logs.append(relative_log_filename)
 
+        #: Run Cycle
         frame_counter: int = 0
         frame_thresholds: List[Tuple[bool, int]] = []
         q_data = type.ProcessorQueueData(current_frame=frame_counter, logs=logs, finished=False)
         while reading:
+            capture.set(cv2.CAP_PROP_POS_FRAMES, frame_counter)
             reading, frame = capture.read()
             if reading:
-                frame_counter += 1
+                # Make sure valid frame count is passed.
+                if frame_counter > total_frames:
+                    frame_counter = total_frames - 1
+                if frame_counter < 0:
+                    frame_counter = 0
                 frame_threshold_found = (
                     self.process_frame_signal_failures(frame=frame,
                                                        template=template,
-                                                       curr_frame_index=frame_counter,
+                                                       curr_frame_index=frame_counter + 1,  # avoid giving frame 0
                                                        dbm_threshold=self.dbm_thresh,
                                                        relative_signal_filestream=filestream_relative_signal,
                                                        max_signal_filestream=filestream_max_signal,
@@ -161,6 +171,10 @@ class Processor(object):
                     q_data.current_frame = frame_counter
                     q_data.logs = logs
                     self.data_q.put(q_data)
+                frame_counter = get_current_frame_counter(current_frame_count=frame_counter,
+                                                          frames_to_process_per_sec=self.frames_to_process_per_sec,
+                                                          fps=int(self.fps))
+        #: Run cleanup
         if not kill_runner:
             if self.scan_for_threshold and self.record_relative_signal:
                 self.graph_dbm_thresholds(thresholds=frame_thresholds, total_frames=frame_counter, frames_per_sec=self.fps,
@@ -192,6 +206,7 @@ class Processor(object):
     def graph_dbm_thresholds(self, thresholds: List[Tuple[bool, int]], total_frames: int, frames_per_sec: float,
                              video_fp: str, data_logfile: str, save_directory: str):
         try:
+            logging.info("Graphing relative signal failures...")
             elapsed_time_s: float = (total_frames / frames_per_sec)
             x_axis: List = []
             y_axis: List = []
@@ -208,8 +223,8 @@ class Processor(object):
                                     f"DBM Magnitude Limit (0 to 1): {self.dbm_thresh}, "
                                     f"BGRA Minimum Trace Filter: {self.bgra_min_filter}, "
                                     f"BGRA Maximum Trace Filter: {self.bgra_max_filter}, ")
-            filename: str = f"{save_directory}/{type.get_datetime_heading()}_relative_signal_magnitude_failures.png"
-            fig.write_image(filename)
+            filename: str = f"{save_directory}/{type.get_datetime_heading()}_relative_signal_magnitude_failures.html"
+            fig.write_html(filename)
         except Exception as e:
             logging.critical(f"Issue while graphing signal threshold failures: {e}")
 
@@ -598,6 +613,26 @@ def get_graph_value_str(text: str, tag: str, units: List[str], text_position: in
     index_min = min(range(len(parsed_strings)), key=parsed_strings.__getitem__)
     final_parsed_str = f"{parsed_string} {units[index_min]}"
     return final_parsed_str, units[index_min]
+
+
+def get_current_frame_counter(current_frame_count: int, frames_to_process_per_sec: int, fps: int) -> int:
+    frame_count_remainder = (current_frame_count & fps) / fps
+    print(f"remainder = {frame_count_remainder}")
+    frame_count_delta = fps - frames_to_process_per_sec
+    frame_count_in_this_second = int(frame_count_remainder * fps)
+    desired_frame_count: int = 0
+    if frame_count_in_this_second > (fps - frame_count_delta):
+        desired_frame_count = current_frame_count + frame_count_delta
+    else:
+        desired_frame_count = current_frame_count + 1
+    print(f"frame count remainder: {frame_count_remainder}\n"
+          f"frames count delta: {frame_count_delta}\n"
+          f"frame count this second: {frame_count_in_this_second}\n"
+          f"desired frame count = {desired_frame_count}\n"
+          f"current frame = {current_frame_count}\n"
+          f"frames to process per sec: {frames_to_process_per_sec}\n"
+          f"fps = {fps}")
+    return desired_frame_count
 
 
 #: Main entry point
