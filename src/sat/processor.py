@@ -13,7 +13,7 @@ import plotly.graph_objects as go
 import cv2
 import numpy
 import pytesseract
-import type
+import saattype
 import re
 from cv2 import Mat
 from typing import List, Tuple, TextIO, Any, Optional
@@ -89,7 +89,7 @@ class Processor(object):
         total_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
         self.fps = capture.get(cv2.CAP_PROP_FPS)
         reading: bool = True
-        heading = type.get_datetime_heading()
+        heading = saattype.get_datetime_heading()
         test_cycle_dir: str = f"{self.log_dir}\\{heading}_spectrum_analyzer_tool_capture_cycle"
         os.makedirs(test_cycle_dir, exist_ok=True)
         relative_log_filename: str = ''
@@ -141,7 +141,7 @@ class Processor(object):
         #: Run Cycle
         frame_counter: int = 0
         frame_thresholds: List[Tuple[bool, int]] = []
-        q_data = type.ProcessorQueueData(current_frame=frame_counter, logs=logs, finished=False)
+        q_data = saattype.ProcessorQueueData(current_frame=frame_counter, logs=logs, finished=False)
         while reading:
             capture.set(cv2.CAP_PROP_POS_FRAMES, frame_counter)
             reading, frame = capture.read()
@@ -203,7 +203,7 @@ class Processor(object):
         logging.info(f"Finished processing...")
         if self.data_q is not None:
             logging.debug(f"FINISHED: Data queue in processor is not empty: Sending finish command")
-            q_data = type.ProcessorQueueData(current_frame=100, logs=logs, finished=True)
+            q_data = saattype.ProcessorQueueData(current_frame=100, logs=logs, finished=True)
             self.data_q.put(q_data)
 
     def graph_dbm_thresholds(self, thresholds: List[Tuple[bool, int]], total_frames: int, frames_per_sec: float,
@@ -226,7 +226,7 @@ class Processor(object):
                                     f"DBM Magnitude Limit (0 to 1): {self.dbm_thresh}, "
                                     f"BGRA Minimum Trace Filter: {self.bgra_min_filter}, "
                                     f"BGRA Maximum Trace Filter: {self.bgra_max_filter}, ")
-            filename: str = f"{save_directory}/{type.get_datetime_heading()}_relative_signal_magnitude_failures.html"
+            filename: str = f"{save_directory}/{saattype.get_datetime_heading()}_relative_signal_magnitude_failures.html"
             fig.write_html(filename)
         except Exception as e:
             logging.critical(f"Issue while graphing signal threshold failures: {e}")
@@ -349,7 +349,7 @@ class Processor(object):
 
                     if curr_y_normalized > dbm_threshold:  # coordinates start at top-left
                         under_threshold = True
-        formatted_time = type.convert_seconds_to_datetime_hour_min_sec_ms(seconds=curr_frame_index / self.fps)
+        formatted_time = saattype.convert_seconds_to_datetime_hour_min_sec_ms(seconds=curr_frame_index / self.fps)
         try:
             if relative_signal_filestream is not None and record_relative_coordinate is True:
                 relative_signal_filestream.write(f"{formatted_time}, {','.join(map(str, normalized_coordinates))}\n")

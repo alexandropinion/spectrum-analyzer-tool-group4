@@ -21,7 +21,7 @@ from processor import get_video_config, get_frame_count_and_fps, get_specific_fr
     crop_template_from_frame, parse_trace_from_frame, load_template_im, read_signal_levels_from_frame, \
     get_preprocessed_image_for_text_detection, Processor
 from distribution import __app_name__, __app_version__
-from src.sat.type import ProcessorParams, get_datetime_heading
+from saattype import ProcessorParams, get_datetime_heading
 
 #: Globals
 CONFIG_FILENAME: str = 'config.ini'
@@ -29,6 +29,12 @@ DEFAULT_APP_WIDTH: int = 1277
 DEFAULT_APP_HEIGHT: int = 830
 DEFAULT_MAIN_WINDOW_WIDTH: int = 800
 DEFAULT_MAIN_WINDOW_HEIGHT: int = 600
+
+
+def resource_path(relative_path):
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath('.'), relative_path)
 
 
 class MainWindow(QMainWindow):
@@ -39,7 +45,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self, widget: QtWidgets.QStackedWidget):
         super(MainWindow, self).__init__()
-        uic.loadUi("load_page.ui", self)
+        uic.loadUi(resource_path("load_page.ui"), self)
         self.setWindowTitle(f"Spectrum Analyzer Tool")
         self.current_loaded_video_filepath: str = ""
         self.widget = widget
@@ -132,7 +138,7 @@ class CalibrationWindow(QMainWindow):
     def __init__(self, widget: QtWidgets.QStackedWidget):
         super(CalibrationWindow, self).__init__()
         self.widget = widget
-        uic.loadUi("calibration_page.ui", self)
+        uic.loadUi(resource_path("calibration_page.ui"), self)
         self.color_picker_btn = self.findChild(QPushButton, "colorPickerBtn")
         self.color_picker_btn.clicked.connect(self.color_picker_btn_callback)
         self.frame_label = self.findChild(QLabel, "frameLabel")
@@ -268,7 +274,7 @@ class TemplateWindow(QMainWindow):
         self.window_initialized: bool = False
         self.current_template = []
         self.widget = widget
-        uic.loadUi("template_page.ui", self)
+        uic.loadUi(resource_path("template_page.ui"), self)
 
         self.next_page_btn = self.findChild(QPushButton, 'nextPageBtn')
         self.next_page_btn.clicked.connect(self.next_page_btn_callback)
@@ -471,7 +477,7 @@ class SignalWindow(QMainWindow):
         self.window_initialized: bool = False
         self.current_template = []
         self.widget = widget
-        uic.loadUi("signal_page.ui", self)
+        uic.loadUi(resource_path("signal_page.ui"), self)
         self.current_video_filepath: str = ""
         self.current_template_filepath: str = ""
         self.current_text_img_threshold: int = 0
@@ -852,7 +858,7 @@ class ProgressWindow(QMainWindow):
         super(ProgressWindow, self).__init__()
         self.window_initialized: bool = False
         self.widget = widget
-        uic.loadUi("progress_page.ui", self)
+        uic.loadUi(resource_path("progress_page.ui"), self)
         self.progress_bar = self.findChild(QProgressBar, "progressBar")
         self.cancel_btn = self.findChild(QPushButton, "cancelBtn")
         self.cancel_btn.setStyleSheet("background-color : #FFC2B9")
@@ -864,7 +870,7 @@ class ProgressWindow(QMainWindow):
         self.current_processor_thread: ProcessorThread = None
         stylesheet = '''
                     #MainWindow {
-                        background-image: url(loading_background.jpg);
+                        background-image: url(file:///''' + resource_path('loading_background.jpg') + ''');
                         background-repeat: no-repeat;
                         background-position: center;
                     }
@@ -927,7 +933,7 @@ class ProgressWindow(QMainWindow):
             if data.finished:
                 logging.critical(f"Finished processing...")
                 self.plain_text_box.appendPlainText(
-                         f"{get_datetime_heading()}: Video file processing ending...")
+                    f"{get_datetime_heading()}: Video file processing ending...")
                 self.finished_processing_signal.emit(True)
         except Exception as e:
             logging.critical(f"Error while calling data queue callback: {e}")
@@ -956,7 +962,7 @@ def get_all_processor_params_from_ini(ini_fp: str) -> Tuple[bool, ProcessorParam
             params = ProcessorParams(video_fp=conf['app']['load_video_filepath'],
                                      template_fp=conf['cal.template']['cal_template_filepath'],
                                      log_directory=conf['cal.signal']['csv_output_directory'],
-                                     dbm_magnitude_threshold=float(conf['cal.signal']['threshold_percent'])/100.0,
+                                     dbm_magnitude_threshold=float(conf['cal.signal']['threshold_percent']) / 100.0,
                                      bgra_min_filter=[int(conf['cal.template']['blue_min']),
                                                       int(conf['cal.template']['green_min']),
                                                       int(conf['cal.template']['red_min']),
