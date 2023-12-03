@@ -870,7 +870,7 @@ class ProgressWindow(QMainWindow):
         self.current_processor_thread: ProcessorThread = None
         stylesheet = '''
                     #MainWindow {
-                        background-image: url(file:///''' + resource_path('loading_background.jpg') + ''');
+                        background-image: url(loading_background.jpg);
                         background-repeat: no-repeat;
                         background-position: center;
                     }
