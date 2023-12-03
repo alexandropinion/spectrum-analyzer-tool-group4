@@ -7,7 +7,7 @@ This is a tool that can be utilized to process video captures of specific spectr
 Engineers and analysts at the 402 SWEG Robbins AFB are responsible for verifying frequency and amplitude data from a video of a Spectrum Analyzer representing an Aircraft Electronic Warfare (EW) System Under Test (SUT). The test could be a calibration or a test of the EW response to threat systems. The goal of the project is to reduce the manual toil involved in the review process and allow the transcribed data to be manipulated and further analyzed for anomalies. The current software project plan will provide a path for completing and managing the development and delivery of the provided software solution. This plan functions as a software development road map. It outlines all the procedures and information required to develop the program, including what it should do, who will work on it, when it will be completed, and how much it will cost. It keeps things organized and aids with everyone's understanding of what must be done, ensuring that the program is finished effectively and on schedule.
 
 ## How to: Run Executable
-- Unzip the latest .zip inside ~/spectrum-analyzer-tool-group5/src/dist
+- Unzip the latest .zip released in:  https://github.com/alexandropinion/spectrum-analyzer-tool-group4/releases/tag/v1.0.0
 - Click the Spectrum Analyzer Tool.exe to launch the application
 - Press the **Select Video** button to select the desired video file to load.
 - Press the **Calibration Preset** button to begin calibrating the processor, or Press **Process Video** if previous calibration has been completed for the desired video file.
@@ -25,6 +25,12 @@ If the customer would like to modify the existing code, the following environmen
   - Once all changes are made, run the distribution.py file from this directory
     - Executable and all artifacts will be created into dist/[current_version_and_app_name_here].zip
 - Once python environment has been setup and requirements.txt has been installed, the user can run ~/spectrum-analyzer-tool-group5/src/sat/gui.py to launch the Graphical User Interface to begin processing video.
+
+### Build the Executable
+Once the environment above is setup, the user can build the Spectrum Analyzer Tool.exe through a few automated steps. The user may do the following:
+- Locate the ~/spectrum-analyzer-tool-group5/src/distribution.py in the IDE (Note: Pycharm environment was utilized with a virtual environment)
+- Run distribution.py 
+- Once script is finished generated the executable, locate the .zip in ~/spectrum-analyzer-tool-group5/src/dist - this .zip contains the Spectrum Analyzer Tool.exe
 
 # LICENSE
 ___
